@@ -3,6 +3,8 @@ import ast
 import json
 import re
 from pathlib import Path
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, render_template, request, send_file, abort, flash, redirect, url_for, jsonify, current_app
 from flask_login import login_required
@@ -16,6 +18,145 @@ from app.services.ops_state import rebuild_ops_state_from_manifests, apply_ops_s
 manifest = Blueprint("manifest", __name__, url_prefix="/manifest")
 
 TICKET_PRICE = 299
+BRISBANE_TZ = ZoneInfo("Australia/Brisbane")
+
+ROSTER_TEXT = """MARCH 2026
+1 Sun Adam/Will/Ed
+2 Mon Adam/Will/Trin
+3 Tue Adam/Will/Trin
+4 Wed Adam/Will/Trin & Nikki
+5 Thu Marvin/Ed&Will/Trin&Ed - Adam Leave
+6 Fri Marvin/Greg/Ed
+7 Sat Marvin/Greg/Ed - Trin Leave
+8 Sun Marvin/Will/Ed
+9 Mon Marvin/Will/Ed
+10 Tue Marvin/Will/Ed - Adam Back
+11 Wed Adam/Will/Nikki
+12 Thu Adam/Will/Ed
+13 Fri Adam/Greg/Ed
+14 Sat Adam/Greg/Ed - Trin Back
+15 Sun Adam/Will/Trin
+16 Mon Marvin/Will/Trin
+17 Tue Marvin/Ed/Trin
+18 Wed Marvin/Ed/Trin
+19 Thu Marvin/Ed/Trin
+20 Fri Adam/Greg/Trin
+21 Sat Adam/Greg/Ed
+22 Sun Adam/Will/Ed
+23 Mon Adam/Will/Trin
+24 Tue Marvin/Will/Trin
+25 Wed Marvin/Ed/Trin
+26 Thu Marvin/Ed/Trin
+27 Fri Adam/Greg/Trin
+28 Sat Adam/Greg/Trin
+29 Sun Adam/Will/Ed
+30 Mon Marvin/Will/Trin
+31 Tue Marvin/Will/Trin"""
+
+
+def _active_date(day_offset):
+    return (datetime.now(BRISBANE_TZ) + timedelta(days=day_offset)).date()
+
+
+def _format_day_heading(active_day, target_date):
+    label = "Tomorrow" if active_day == "tomorrow" else "Today"
+    return f"{label} {target_date.day}/{target_date.month}"
+
+
+def _format_slot_compact(manifest_item):
+    slot_iso = (manifest_item or {}).get("slot_iso") or ""
+    slot_dt = None
+    if slot_iso:
+        try:
+            slot_dt = datetime.fromisoformat(slot_iso)
+        except Exception:
+            slot_dt = None
+    if slot_dt:
+        return slot_dt.strftime("%H%M")
+    slot = str((manifest_item or {}).get("slot") or "").strip()
+    compact = slot.replace(":", "").replace(" ", "")
+    compact = compact.replace("AM", "").replace("PM", "")
+    return compact or slot or "----"
+
+
+def _format_pickup_time_short(value):
+    value = str(value or "").strip()
+    if not value:
+        return "TBC"
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            dt = datetime.strptime(value, fmt)
+            return dt.strftime("%H:%M").lstrip("0")
+        except Exception:
+            pass
+    return value
+
+
+def _parse_roster_text(text):
+    rows = []
+    current_month = 3
+    current_year = 2026
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        if not line or line.upper().startswith("MARCH"):
+            continue
+        notes = ""
+        if " - " in line:
+            line, notes = line.split(" - ", 1)
+            notes = notes.strip()
+        parts = line.split(maxsplit=2)
+        if len(parts) < 3:
+            continue
+        try:
+            day_num = int(parts[0])
+        except Exception:
+            continue
+        shift_parts = [segment.strip() for segment in parts[2].split("/")]
+        while len(shift_parts) < 3:
+            shift_parts.append("")
+        rows.append({
+            "date": datetime(current_year, current_month, day_num).date(),
+            "day": day_num,
+            "weekday": parts[1],
+            "pilot": shift_parts[0],
+            "bus_driver": shift_parts[1],
+            "operations": shift_parts[2],
+            "notes": notes,
+        })
+    return rows
+
+
+ROSTER_ROWS = _parse_roster_text(ROSTER_TEXT)
+ROSTER_BY_DATE = {row["date"].isoformat(): row for row in ROSTER_ROWS}
+
+
+def _roster_for_date(target_date):
+    return ROSTER_BY_DATE.get(target_date.isoformat(), {
+        "date": target_date,
+        "day": target_date.day,
+        "weekday": target_date.strftime("%a"),
+        "pilot": "TBC",
+        "bus_driver": "TBC",
+        "operations": "TBC",
+        "notes": "",
+    })
+
+
+def _pickup_breakdown_for_manifest(manifest_item):
+    grouped = {}
+    for order in (manifest_item or {}).get("orders", []) or []:
+        location = (order.get("pickup_location") or "No pickup location").strip()
+        time_value = order.get("pickup_time") or ""
+        key = (location, time_value)
+        grouped.setdefault(key, {
+            "location": location,
+            "time": time_value,
+            "pax": 0,
+        })
+        grouped[key]["pax"] += int(order.get("pax_total") or 0)
+    rows = list(grouped.values())
+    rows.sort(key=lambda item: (item.get("time") or "99:99:99", item.get("location") or ""))
+    return rows
 
 
 def _snapshot_dir():
@@ -25,8 +166,7 @@ def _snapshot_dir():
 
 
 def _date_key(day_offset):
-    from datetime import datetime, timedelta
-    return (datetime.now().date() + timedelta(days=day_offset)).strftime("%Y-%m-%d")
+    return _active_date(day_offset).strftime("%Y-%m-%d")
 
 
 def _snapshot_path(day_offset):
@@ -346,6 +486,50 @@ def _pickup_body(order):
     """
 
 
+def _delay_subject(order, delay_minutes, test_mode=False):
+    prefix = "TEST Delay Notice - " if test_mode else "Courtesy Bus Delay - "
+    return f"{prefix}{order.get('order_number') or 'Order'}"
+
+
+def _delay_body(order, delay_minutes):
+    customer = order.get("customer_name") or "Customer"
+    order_number = order.get("order_number") or "-"
+    return f"""
+    <div>Hello {customer}</div>
+    <br>
+    <div>Unfortunately your courtesy bus has been delayed by {delay_minutes} minutes, please remain at your pickup location to avoid missing the bus, sorry for any inconvenience.</div>
+    <br>
+    <div>Reservation Reference {order_number}</div>
+    <br>
+    <div>Kind regards,</div>
+    <div>Opsly / Whitsunday Air Tours</div>
+    """
+
+
+def _parse_delay_minutes(raw_value):
+    value = str(raw_value or "").strip()
+    if not value:
+        raise ValueError("Delay time is required")
+    minutes = int(value)
+    if minutes <= 0:
+        raise ValueError("Delay time must be greater than 0")
+    if minutes > 240:
+        raise ValueError("Delay time is too large")
+    return minutes
+
+
+def _send_delay_for_order(order, delay_minutes, *, test_mode=False):
+    email = "edsaleh98@gmail.com" if test_mode else _clean_contact(order.get("email"))
+    if not test_mode and (not email or "@" not in email):
+        resolved = _first_real_email_from_anything(order)
+        if resolved:
+            email = resolved
+    if not email or "@" not in email:
+        return False, "No email found"
+    send_email(email, _delay_subject(order, delay_minutes, test_mode=test_mode), _delay_body(order, delay_minutes))
+    return True, email
+
+
 def _send_pickup_for_order(order, fallback_to_admin=False):
     email = _clean_contact(order.get("email"))
     if not email or "@" not in email:
@@ -453,6 +637,47 @@ def send_pickup_flight():
     return redirect(url_for("manifest.home", day=active_day))
 
 
+
+@manifest.route("/send-delay-flight", methods=["POST"])
+@login_required
+def send_delay_flight():
+    day = request.form.get("day", "today").strip().lower()
+    active_day = "tomorrow" if day == "tomorrow" else "today"
+    slot = request.form.get("slot", "").strip()
+    test_mode = str(request.form.get("test_mode", "false")).strip().lower() == "true"
+
+    try:
+        delay_minutes = _parse_delay_minutes(request.form.get("delay_minutes"))
+    except Exception as e:
+        flash(f"Delay email not sent: {e}")
+        return redirect(url_for("manifest.home", day=active_day))
+
+    day_offset = 1 if active_day == "tomorrow" else 0
+    sent = 0
+    failed = 0
+
+    manifests = _load_or_build_snapshot(day_offset)
+    manifests, _state = _apply_state(active_day, manifests)
+
+    for manifest_item in manifests:
+        if (manifest_item.get("slot_display_full") or "").strip() != slot:
+            continue
+        for order in manifest_item.get("orders", []) or []:
+            try:
+                ok, _ = _send_delay_for_order(order, delay_minutes, test_mode=test_mode)
+                if ok:
+                    sent += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
+        break
+
+    label = "Test delay emails" if test_mode else "Delay emails"
+    flash(f"{label} sent: {sent} sent, {failed} failed")
+    return redirect(url_for("manifest.home", day=active_day))
+
+
 @manifest.route("/send-pickup-day", methods=["POST"])
 @login_required
 def send_pickup_day():
@@ -517,6 +742,87 @@ def order_json(order_number):
     if not order:
         abort(404)
     return render_template("order_json.html", order=order, active_day=active_day)
+
+
+@manifest.route("/roster")
+@login_required
+def roster_page():
+    grouped_rows = {}
+    for row in ROSTER_ROWS:
+        month_key = row["date"].strftime("%B %Y")
+        grouped_rows.setdefault(month_key, []).append(row)
+    return render_template("roster.html", grouped_rows=grouped_rows, page_name="Operations Roster")
+
+
+@manifest.route("/export-day")
+@login_required
+def export_day_pdf():
+    day = request.args.get("day", "today").strip().lower()
+    active_day = "tomorrow" if day == "tomorrow" else "today"
+    day_offset = 1 if active_day == "tomorrow" else 0
+    target_date = _active_date(day_offset)
+
+    manifests = _load_or_build_snapshot(day_offset)
+    manifests, _state = _apply_state(active_day, manifests)
+    roster = _roster_for_date(target_date)
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    left = 40
+    y = height - 50
+
+    def write_line(text_value, font_name="Helvetica", font_size=11, gap=15):
+        nonlocal y
+        if y < 60:
+            pdf.showPage()
+            y = height - 50
+        pdf.setFont(font_name, font_size)
+        pdf.drawString(left, y, str(text_value))
+        y -= gap
+
+    write_line("Opsly daily manifest", "Helvetica-Bold", 18, 24)
+    write_line("Great work today team.", "Helvetica-Bold", 12, 20)
+    write_line(_format_day_heading(active_day, target_date), "Helvetica-Bold", 15, 22)
+    write_line(f"Generated: {datetime.now(BRISBANE_TZ).strftime('%d/%m/%Y %H:%M')} Brisbane time", "Helvetica", 9, 18)
+
+    write_line(f"Phone / Operations: @{roster.get('operations') or 'TBC'}", "Helvetica-Bold", 12, 16)
+    write_line(f"Pilot: @{roster.get('pilot') or 'TBC'}", "Helvetica-Bold", 12, 16)
+    write_line(f"Minibus: @{roster.get('bus_driver') or 'TBC'}", "Helvetica-Bold", 12, 18)
+    if roster.get("notes"):
+        write_line(f"Roster notes: {roster['notes']}", "Helvetica", 10, 16)
+    write_line("", gap=10)
+
+    write_line("Pilot summary", "Helvetica-Bold", 13, 18)
+    if manifests:
+        for manifest_item in manifests:
+            weight_text = f", {manifest_item.get('total_weight')}kg" if manifest_item.get("total_weight") is not None else ""
+            write_line(f"{_format_slot_compact(manifest_item)} - {manifest_item.get('total_pax', 0)} pax{weight_text}", "Helvetica", 11, 15)
+    else:
+        write_line("No flights loaded for this day.", "Helvetica", 11, 15)
+
+    write_line("", gap=10)
+    write_line("Bus pickup summary", "Helvetica-Bold", 13, 18)
+    if manifests:
+        for manifest_item in manifests:
+            write_line(f"{_format_slot_compact(manifest_item)} - {manifest_item.get('total_pax', 0)}", "Helvetica-Bold", 11, 15)
+            pickup_rows = _pickup_breakdown_for_manifest(manifest_item)
+            if not pickup_rows:
+                write_line("* No pickup data", "Helvetica", 10, 14)
+                continue
+            for pickup_row in pickup_rows:
+                line = f"* {pickup_row['location']} - {pickup_row['pax']} ({_format_pickup_time_short(pickup_row['time'])})"
+                write_line(line, "Helvetica", 10, 14)
+            write_line("", gap=8)
+
+    pdf.save()
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=f"opsly_day_manifest_{target_date.strftime('%Y%m%d')}.pdf",
+        mimetype="application/pdf",
+    )
 
 
 @manifest.route("/export")

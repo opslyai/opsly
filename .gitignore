@@ -7,3 +7,12 @@ __pycache__/
 .env
 .env.*
 instance/
+
+.env
+instance/
+venv/
+__pycache__/
+.git-credentials
+.python_history
+*.bak.*
+opsly_backup_*.tar.gz

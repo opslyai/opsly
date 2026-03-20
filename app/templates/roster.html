@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flightdeck-wrap">
+    <section class="fd-hero">
+        <p class="fd-kicker">Opsly operations planning</p>
+        <div class="fd-title-row">
+            <div>
+                <h1 class="fd-title">Operations roster</h1>
+                <p class="fd-sub">Pilot, bus driver and operations coverage loaded for March 2026.</p>
+            </div>
+            <div class="fd-chip">March 2026</div>
+        </div>
+    </section>
+
+    {% for month, rows in grouped_rows.items() %}
+    <section class="fd-flight roster-card">
+        <div class="fd-flight-top">
+            <div>
+                <div class="fd-kicker">Monthly roster</div>
+                <h2 class="fd-flight-time" style="margin-bottom:0;">{{ month }}</h2>
+            </div>
+        </div>
+        <div class="roster-table-wrap">
+            <table class="roster-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Pilot</th>
+                        <th>Bus driver</th>
+                        <th>Operations</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td>{{ row.day }} {{ row.weekday }}</td>
+                        <td>{{ row.pilot }}</td>
+                        <td>{{ row.bus_driver }}</td>
+                        <td>{{ row.operations }}</td>
+                        <td>{{ row.notes or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}

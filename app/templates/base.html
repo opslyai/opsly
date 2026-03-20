@@ -18,15 +18,18 @@
                 </div>
             </a>
 
+            <button class="nav-mobile-toggle" type="button" aria-expanded="false" aria-label="Toggle navigation">Menu</button>
+
             <nav class="app-nav" aria-label="Primary navigation">
                 <a href="/dashboard" class="app-nav-link {% if request.path == '/dashboard' %}active{% endif %}">Dashboard</a>
 
-                <div class="app-nav-dropdown {% if request.path.startswith('/manifest') or request.path.startswith('/cancellations') or request.path.startswith('/monitoring') %}active{% endif %}">
+                <div class="app-nav-dropdown {% if request.path.startswith('/manifest') or request.path.startswith('/cancellations') or request.path.startswith('/monitoring') or request.path.startswith('/manifest/roster') %}active{% endif %}">
                     <button class="app-nav-button" type="button" aria-expanded="false">Operations</button>
                     <div class="app-nav-menu">
                         <a href="/manifest/?day=today">Flight Deck</a>
                         <a href="/cancellations/?day=today">Cancellations</a>
                         <a href="/monitoring">Monitoring</a>
+                        <a href="/manifest/roster">Roster</a>
                     </div>
                 </div>
 
@@ -58,7 +61,7 @@
                         </span>
                     </div>
                 </div>
-                <button id="theme-toggle" class="theme-toggle-btn" type="button" aria-label="Toggle theme">Light mode</button>
+                <button id="theme-toggle" class="theme-toggle-btn" type="button" aria-label="Toggle theme" title="Toggle theme"><span class="theme-toggle-icon" aria-hidden="true">☀️</span></button>
                 <a href="/logout" class="top-logout">Logout</a>
             </div>
         </div>
@@ -80,7 +83,7 @@
                 <a href="/contact">Inquiry</a>
             </nav>
             <div class="marketing-header-actions">
-                <a href="/contact" class="secondary-btn header-btn">Request demo</a>
+                <button id="theme-toggle" class="theme-toggle-btn" type="button" aria-label="Toggle theme" title="Toggle theme"><span class="theme-toggle-icon" aria-hidden="true">☀️</span></button>
                 <a href="/login" class="primary-btn header-btn">Log in</a>
             </div>
         </div>
@@ -104,8 +107,13 @@
 
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        const btn = document.getElementById('theme-toggle');
-        if (btn) btn.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+        document.querySelectorAll('#theme-toggle').forEach(function (btn) {
+            const icon = btn.querySelector('.theme-toggle-icon');
+            const isDark = theme === 'dark';
+            btn.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+            btn.setAttribute('title', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+            if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+        });
         try { localStorage.setItem(storageKey, theme); } catch (e) {}
     }
 
@@ -113,6 +121,27 @@
         let saved = 'dark';
         try { saved = localStorage.getItem(storageKey) || 'dark'; } catch (e) {}
         applyTheme(saved);
+
+        const headerInner = document.querySelector(".app-header-inner");
+        const mobileToggle = document.querySelector(".nav-mobile-toggle");
+        if (headerInner && mobileToggle) {
+            const syncNavState = function () {
+                const isOpen = headerInner.classList.contains("nav-open");
+                mobileToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+                mobileToggle.textContent = isOpen ? "Close" : "Menu";
+            };
+            mobileToggle.addEventListener("click", function () {
+                headerInner.classList.toggle("nav-open");
+                syncNavState();
+            });
+            window.addEventListener("resize", function () {
+                if (window.innerWidth > 980) {
+                    headerInner.classList.remove("nav-open");
+                    syncNavState();
+                }
+            });
+            syncNavState();
+        }
 
         document.addEventListener('click', function (event) {
             const toggle = event.target.closest('#theme-toggle');
@@ -125,6 +154,13 @@
             document.querySelectorAll('.app-nav-dropdown.open').forEach(function (item) {
                 if (!item.contains(event.target)) item.classList.remove('open');
             });
+            const mobileToggle = document.querySelector('.nav-mobile-toggle');
+            const headerInner = document.querySelector('.app-header-inner');
+            if (mobileToggle && headerInner && !event.target.closest('.app-header-inner')) {
+                headerInner.classList.remove('nav-open');
+                mobileToggle.setAttribute('aria-expanded', 'false');
+                mobileToggle.textContent = 'Menu';
+            }
         });
 
         document.querySelectorAll('.app-nav-dropdown').forEach(function (dropdown) {

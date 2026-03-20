@@ -2,35 +2,43 @@
 {% block content %}
 <div class="flightdeck-wrap">
     <section class="fd-hero">
+    <div class="fd-hero-copy-wrap">
+
         <p class="fd-kicker">Opsly unified operations page</p>
         <div class="fd-title-row">
             <div>
                 <h1 class="fd-title">{{ page_name or "Flight Deck" }}</h1>
                 <p class="fd-sub">Manifests, cancellations and pickup comms in one professional operations workspace.</p>
+
             </div>
             <div class="fd-chip {% if stats.whole_day_cancelled %}dark{% endif %}">
                 {{ active_day|title }}{% if stats.whole_day_cancelled %} · Whole day cancelled{% endif %}
             </div>
         </div>
 
-        <div class="fd-day-toggle">
-            <a class="fd-day-pill {% if active_day == 'today' %}active{% endif %}" href="{{ url_for('manifest.home', day='today') }}">Today</a>
-            <a class="fd-day-pill {% if active_day == 'tomorrow' %}active{% endif %}" href="{{ url_for('manifest.home', day='tomorrow') }}">Tomorrow</a>
-        </div>
-
         <div class="fd-actions">
             <a href="{{ url_for('manifest.refresh_snapshot', day=active_day) }}" class="secondary-btn fd-action-btn">Refresh day data</a>
+            <a href="{{ url_for('manifest.export_day_pdf', day=active_day) }}" class="secondary-btn fd-action-btn">Export whole day PDF</a>
             <form method="POST" action="{{ url_for('manifest.send_pickup_day') }}" style="margin:0;">
                 <input type="hidden" name="day" value="{{ active_day }}">
                 <button type="submit" class="secondary-btn fd-action-btn" onclick="return confirm('Send pickup information for the whole {{ active_day }} schedule?')">Send pickup for all stays</button>
             </form>
             <form id="cancel-day-form" method="POST" action="/cancellations/cancel-day" style="margin:0;">
-                <input type="hidden" name="day" value="{{ active_day }}">
                 <input type="hidden" name="reason" id="cancel-day-reason" value="other">
                 <button type="button" class="export-btn fd-action-btn" onclick="openCancelModal('cancel-day-form','whole {{ active_day }} schedule')">Cancel whole day</button>
             </form>
         </div>
-    </section>
+    
+    </div>
+    <div class="fd-day-toggle-wrap">
+        
+        <div class="fd-day-toggle">
+            <a href="{{ url_for('manifest.home', day='today') }}" class="fd-day-pill {% if active_day != 'tomorrow' %}active{% endif %}">Today</a>
+            <a href="{{ url_for('manifest.home', day='tomorrow') }}" class="fd-day-pill {% if active_day == 'tomorrow' %}active{% endif %}">Tomorrow</a>
+        </div>
+        
+    </div>
+</section>
 
     <section class="fd-grid">
         <div class="fd-stat"><div class="fd-stat-label">Flights</div><div class="fd-stat-value">{{ stats.flights }}</div><div class="fd-stat-sub">{{ stats.cancelled_flights }} cancelled</div></div>
@@ -65,11 +73,24 @@
                 </div>
 
                 <div class="fd-flight-ops">
-                    <a href="{{ url_for('manifest.export_pdf', day=active_day, slot=manifest.slot_iso) }}" class="secondary-btn fd-action-btn">Export PDF</a>
-                    <form method="POST" action="{{ url_for('manifest.send_pickup_flight') }}" style="margin:0;">
+<form method="POST" action="{{ url_for('manifest.send_pickup_flight') }}" style="margin:0;">
                         <input type="hidden" name="day" value="{{ active_day }}">
                         <input type="hidden" name="slot" value="{{ manifest.slot_display_full }}">
                         <button type="submit" class="secondary-btn fd-action-btn" onclick="return confirm('Send pickup information for the whole {{ manifest.slot_display_full|e }} flight?')">Send flight pickup</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('manifest.send_delay_flight') }}" style="margin:0;">
+                        <input type="hidden" name="day" value="{{ active_day }}">
+                        <input type="hidden" name="slot" value="{{ manifest.slot_display_full }}">
+                        <input type="hidden" name="delay_minutes" class="delay-minutes-input" value="">
+                        <input type="hidden" name="test_mode" value="false">
+                        <button type="button" class="secondary-btn fd-action-btn" onclick="openDelayModal(this.form, '{{ manifest.slot_display_full|e }}', false)">Send delay option</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('manifest.send_delay_flight') }}" style="margin:0;">
+                        <input type="hidden" name="day" value="{{ active_day }}">
+                        <input type="hidden" name="slot" value="{{ manifest.slot_display_full }}">
+                        <input type="hidden" name="delay_minutes" class="delay-minutes-input" value="">
+                        <input type="hidden" name="test_mode" value="true">
+                        <button type="button" class="secondary-btn fd-action-btn" onclick="openDelayModal(this.form, '{{ manifest.slot_display_full|e }}', true)">Test delay email</button>
                     </form>
                     <form id="cancel-flight-{{ loop.index }}" method="POST" action="/cancellations/cancel-flight" style="margin:0;">
                         <input type="hidden" name="slot" value="{{ manifest.slot_display_full }}">
@@ -103,18 +124,21 @@
                         </div>
 
                         {% if order.passengers %}
-                        <div class="fd-passengers" style="margin-top:14px;">
-                            {% for pax in order.passengers %}
-                            <div class="fd-pax">
-                                <div class="fd-pax-name">{{ pax.name }}</div>
-                                <div class="fd-pax-lines">
-                                    {% if pax.weight_lines %}{{ pax.weight_lines|join(' · ') }}<br>{% elif pax.weight %}{{ pax.weight }} kg<br>{% endif %}
-                                    Email: {{ pax.email or order.email or 'No email' }}<br>
-                                    Mobile: {{ pax.mobile or order.mobile or 'No phone' }}
+                        <details class="fd-customer-details" style="margin-top:14px;">
+                            <summary class="fd-customer-summary">Customer details · {{ order.passengers|length }} pax</summary>
+                            <div class="fd-passengers">
+                                {% for pax in order.passengers %}
+                                <div class="fd-pax">
+                                    <div class="fd-pax-name">{{ pax.name }}</div>
+                                    <div class="fd-pax-lines">
+                                        {% if pax.weight_lines %}{{ pax.weight_lines|join(' · ') }}<br>{% elif pax.weight %}{{ pax.weight }} kg<br>{% endif %}
+                                        Email: {{ pax.email or order.email or 'No email' }}<br>
+                                        Mobile: {{ pax.mobile or order.mobile or 'No phone' }}
+                                    </div>
                                 </div>
+                                {% endfor %}
                             </div>
-                            {% endfor %}
-                        </div>
+                        </details>
                         {% endif %}
                     </div>
 
@@ -142,6 +166,25 @@
     {% endif %}
 </div>
 
+<div class="fd-modal" id="delay-modal">
+    <div class="fd-modal-card">
+        <h3 style="margin:0 0 8px 0;">Send delay email</h3>
+        <p id="delay-modal-copy" style="margin:0; color: var(--text-soft);">Choose a delay time.</p>
+        <div class="fd-delay-options">
+            <button type="button" class="secondary-btn fd-action-btn" onclick="submitDelayOption(10)">10 minutes</button>
+            <button type="button" class="secondary-btn fd-action-btn" onclick="submitDelayOption(15)">15 minutes</button>
+            <button type="button" class="secondary-btn fd-action-btn" onclick="submitDelayOption(20)">20 minutes</button>
+        </div>
+        <div class="fd-delay-custom-row">
+            <input type="number" min="1" max="240" step="1" id="delay-custom-minutes" class="text-input" placeholder="Custom minutes">
+            <button type="button" class="primary-btn fd-action-btn" onclick="submitCustomDelay()">Send custom</button>
+        </div>
+        <div class="fd-modal-actions">
+            <button type="button" class="secondary-btn fd-action-btn" onclick="closeDelayModal()">Close</button>
+        </div>
+    </div>
+</div>
+
 <div class="fd-modal" id="cancel-modal">
     <div class="fd-modal-card">
         <h3 style="margin:0 0 8px 0;">Choose cancellation reason</h3>
@@ -156,6 +199,7 @@
 
 <script>
 let activeCancelForm = null;
+let activeDelayForm = null;
 function openCancelModal(formId, itemLabel) {
     activeCancelForm = document.getElementById(formId);
     document.getElementById('cancel-modal-copy').innerText = `Are you sure you want to cancel ${itemLabel}?`;
@@ -170,6 +214,33 @@ function submitCancelReason(reason) {
     const reasonField = activeCancelForm.querySelector('.cancel-reason') || document.getElementById('cancel-day-reason');
     if (reasonField) reasonField.value = reason;
     activeCancelForm.submit();
+}
+function openDelayModal(form, itemLabel, isTest) {
+    activeDelayForm = form;
+    const modeCopy = isTest ? 'This will send test delay emails to edsaleh98@gmail.com.' : 'This will send live delay emails to customer email addresses.';
+    document.getElementById('delay-modal-copy').innerText = `${itemLabel}. ${modeCopy}`;
+    document.getElementById('delay-custom-minutes').value = '';
+    document.getElementById('delay-modal').style.display = 'flex';
+}
+function closeDelayModal() {
+    document.getElementById('delay-modal').style.display = 'none';
+    activeDelayForm = null;
+}
+function submitDelayOption(minutes) {
+    if (!activeDelayForm) return;
+    const field = activeDelayForm.querySelector('.delay-minutes-input');
+    if (!field) return;
+    field.value = String(minutes);
+    activeDelayForm.submit();
+}
+function submitCustomDelay() {
+    const input = document.getElementById('delay-custom-minutes');
+    const value = parseInt(input.value || '', 10);
+    if (!value || value < 1) {
+        input.focus();
+        return;
+    }
+    submitDelayOption(value);
 }
 (function() {
     function updateCountdowns() {
@@ -190,6 +261,211 @@ function submitCancelReason(reason) {
     }
     updateCountdowns();
     setInterval(updateCountdowns, 1000);
+document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeCancelModal();
+            closeDelayModal();
+        }
+    });
 })();
 </script>
 {% endblock %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".fd-flight-card").forEach(function(card) {
+    if (card.dataset.fdCollapsible === "1") return;
+    card.dataset.fdCollapsible = "1";
+
+    var children = Array.from(card.children).filter(function(el){ return el.nodeType === 1; });
+    if (children.length < 2) return;
+
+    var header = children[0];
+    var body = document.createElement("div");
+    body.className = "fd-flight-collapse-body";
+
+    children.slice(1).forEach(function(el) {
+      body.appendChild(el);
+    });
+    card.appendChild(body);
+
+    var toggleWrap = document.createElement("div");
+    toggleWrap.className = "fd-flight-collapse-toggle-wrap";
+
+    var toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "fd-flight-collapse-toggle";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.innerHTML = '<span class="fd-flight-collapse-label">Open flight</span>';
+
+    toggleWrap.appendChild(toggle);
+
+    var target = header.querySelector(".fd-actions") || header.querySelector(".fd-flight-actions") || header;
+    target.appendChild(toggleWrap);
+
+    card.classList.add("fd-flight-collapsible");
+    body.style.display = "none";
+
+    function setOpen(open) {
+      card.classList.toggle("is-open", open);
+      body.style.display = open ? "" : "none";
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      var label = toggle.querySelector(".fd-flight-collapse-label");
+      if (label) label.textContent = open ? "Hide flight" : "Open flight";
+    }
+
+    setOpen(false);
+
+    toggle.addEventListener("click", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(!card.classList.contains("is-open"));
+    });
+  });
+});
+</script>
+
+<script id="fd-clean-deck-script">
+document.addEventListener("DOMContentLoaded", function () {
+  const hero = document.querySelector(".fd-hero") || document.querySelector(".flightdeck-hero") || document.querySelector(".fd-shell .fd-top");
+  const heading = hero ? (hero.querySelector("h1") || hero.querySelector(".fd-title")) : null;
+  const subtitle = hero ? Array.from(hero.querySelectorAll("p")).find(p => /manifests|pickup|operations workspace/i.test((p.textContent || "").trim())) : null;
+
+  function getViewDay() {
+    const url = new URL(window.location.href);
+    return (url.searchParams.get("day") || "today").toLowerCase() === "tomorrow" ? "tomorrow" : "today";
+  }
+
+  function brisbaneDateLabel(dayMode) {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-AU", {
+      timeZone: "Australia/Brisbane",
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    }).formatToParts(now);
+    let day = Number(parts.find(p => p.type === "day").value);
+    const month = parts.find(p => p.type === "month").value;
+    const year = parts.find(p => p.type === "year").value;
+    if (dayMode === "tomorrow") day += 1;
+
+    const temp = new Date(new Intl.DateTimeFormat("en-US", {
+      timeZone: "Australia/Brisbane",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric"
+    }).format(now));
+    if (dayMode === "tomorrow") temp.setDate(temp.getDate() + 1);
+
+    const dayNum = temp.getDate();
+    const monthName = temp.toLocaleString("en-AU", { month: "long", timeZone: "Australia/Brisbane" });
+    const yearNum = temp.getFullYear();
+    const s = (n) => {
+      if ([1,21,31].includes(n)) return "st";
+      if ([2,22].includes(n)) return "nd";
+      if ([3,23].includes(n)) return "rd";
+      return "th";
+    };
+    return `${dayNum}${s(dayNum)} ${monthName} ${yearNum} · Brisbane time`;
+  }
+
+  if (hero && heading) {
+    hero.classList.add("fd-clean-hero");
+
+    let right = hero.querySelector(".fd-clean-hero-right");
+    if (!right) {
+      right = document.createElement("div");
+      right.className = "fd-clean-hero-right";
+      hero.appendChild(right);
+    }
+
+    let toggle = hero.querySelector(".fd-day-toggle");
+    if (!toggle) {
+      toggle = document.createElement("div");
+      toggle.className = "fd-day-toggle";
+      const mk = (label, day) => {
+        const a = document.createElement("a");
+        a.className = "fd-day-pill";
+        a.href = `${window.location.pathname}?day=${day}`;
+        a.textContent = label;
+        return a;
+      };
+      toggle.appendChild(mk("Today", "today"));
+      toggle.appendChild(mk("Tomorrow", "tomorrow"));
+    }
+
+    right.innerHTML = "";
+    right.appendChild(toggle);
+
+    const mode = getViewDay();
+    Array.from(toggle.querySelectorAll(".fd-day-pill")).forEach(el => {
+      const t = (el.textContent || "").trim().toLowerCase();
+      el.classList.toggle("active", t === mode);
+      if (el.tagName === "A") {
+        el.href = `${window.location.pathname}?day=${t}`;
+      }
+    });
+
+    let status = hero.querySelector(".fd-day-status-chip");
+    if (!status) {
+      status = document.createElement("div");
+      status.className = "fd-day-status-chip";
+      right.appendChild(status);
+    }
+
+    status.innerHTML = `
+      <span class="fd-day-status-label">Viewing</span>
+      <span class="fd-day-status-name">${mode === "tomorrow" ? "Tomorrow" : "Today"}</span>
+      <span class="fd-day-status-date">${brisbaneDateLabel(mode)}</span>
+    `;
+
+    const copyWrap = hero.querySelector(".fd-clean-hero-copy") || document.createElement("div");
+    if (!copyWrap.classList.contains("fd-clean-hero-copy")) {
+      copyWrap.className = "fd-clean-hero-copy";
+      hero.insertBefore(copyWrap, hero.firstChild);
+      const kids = Array.from(hero.children).filter(k => k !== right && k !== copyWrap);
+      kids.forEach(k => copyWrap.appendChild(k));
+    }
+  }
+
+  document.querySelectorAll(".fd-flight-card").forEach(function(card, idx) {
+    if (card.dataset.collapseReady === "1") return;
+    card.dataset.collapseReady = "1";
+
+    const kids = Array.from(card.children).filter(n => n.nodeType === 1);
+    if (kids.length < 2) return;
+
+    const header = kids[0];
+    const body = document.createElement("div");
+    body.className = "fd-flight-collapse-body";
+
+    kids.slice(1).forEach(el => body.appendChild(el));
+    card.appendChild(body);
+    card.classList.add("fd-flight-collapsible");
+
+    let actions = header.querySelector(".fd-actions") || header.querySelector(".fd-flight-actions") || header;
+    let toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "fd-flight-collapse-toggle";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.innerHTML = '<span class="fd-flight-collapse-label">Open flight</span>';
+    actions.appendChild(toggle);
+
+    function setOpen(open) {
+      card.classList.toggle("is-open", open);
+      body.style.display = open ? "" : "none";
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      const label = toggle.querySelector(".fd-flight-collapse-label");
+      if (label) label.textContent = open ? "Hide flight" : "Open flight";
+    }
+
+    setOpen(false);
+
+    toggle.addEventListener("click", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(!card.classList.contains("is-open"));
+    });
+  });
+});
+</script>
