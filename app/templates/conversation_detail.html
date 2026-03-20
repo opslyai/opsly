@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <p class="eyebrow">COMMUNICATION DETAIL</p>
+    <h1>{{ detail.subject }}</h1>
+    <p>Parsed from Missive conversation data.</p>
+</div>
+
+<div class="detail-grid">
+    <div class="detail-card">
+        <h3>Email Summary</h3>
+        <div class="detail-row"><strong>From</strong><span>{{ detail.sender }}</span></div>
+        <div class="detail-row"><strong>Type</strong><span>{{ detail.summary_type }}</span></div>
+        {% if detail.order_number %}
+        <div class="detail-row"><strong>Order Number</strong><span>{{ detail.order_number }}</span></div>
+        {% endif %}
+        {% if detail.customer_name %}
+        <div class="detail-row"><strong>Customer Name</strong><span>{{ detail.customer_name }}</span></div>
+        {% endif %}
+        {% if detail.agent %}
+        <div class="detail-row"><strong>Agent</strong><span>{{ detail.agent }}</span></div>
+        {% endif %}
+        <div class="detail-row"><strong>Status</strong><span>{{ detail.status }}</span></div>
+    </div>
+
+    <div class="detail-card">
+        <h3>Message Body</h3>
+        <div class="message-body">{{ detail.body|safe }}</div>
+        {% if detail.web_url %}
+        <p style="margin-top:16px;"><a href="{{ detail.web_url }}" target="_blank">Open in Missive</a></p>
+        {% endif %}
+        <p><a href="/communications/">← Back to inbox</a></p>
+    </div>
+</div>
+{% endblock %}

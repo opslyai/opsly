@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Communications{% endblock %}
+{% block content %}
+<div class="marketing-page comms-page-pro">
+  <section class="marketing-hero">
+    <p class="marketing-kicker">Communications</p>
+    <h1 class="marketing-title">WAT inbox</h1>
+    <p class="marketing-sub">Latest Missive passenger conversations in a tighter triage view built for fast scanning.</p>
+  </section>
+  <section class="comms-pro-grid">
+    {% for convo in conversations %}
+    <article class="comms-pro-card">
+      <div class="comms-pro-top"><h3>{{ convo.subject }}</h3><div class="comms-pro-arrow">→</div></div>
+      <div class="comms-pro-meta"><span class="comms-pill">{{ convo.sender }}</span><span class="comms-pro-time">{{ convo.timestamp }}</span></div>
+      <p class="comms-preview">Passenger thread ready for follow-up or escalation.</p>
+    </article>
+    {% else %}
+    <article class="marketing-card"><h3>Inbox clear</h3><p>No passenger conversations found right now.</p></article>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="json-wrap">
+  <section class="json-hero">
+    <h1 class="json-title">Order JSON</h1>
+    <p class="json-sub">Raw Rezdy data for {{ order_number }}</p>
+  </section>
+  <section class="json-card">
+    <pre>{{ data | tojson(indent=2) }}</pre>
+  </section>
+</div>
+{% endblock %}

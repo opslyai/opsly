@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flightdeck-wrap">
+    <section class="fd-hero">
+        <p class="fd-kicker">Opsly unified operations page</p>
+        <div class="fd-title-row">
+            <div>
+                <h1 class="fd-title">{{ page_name or "Flight Deck" }}</h1>
+                <p class="fd-sub">Manifests, cancellations and pickup comms in one professional operations workspace.</p>
+            </div>
+            <div class="fd-chip {% if stats.whole_day_cancelled %}dark{% endif %}">
+                {{ active_day|title }}{% if stats.whole_day_cancelled %} · Whole day cancelled{% endif %}
+            </div>
+        </div>
+
+        <div class="fd-day-toggle">
+            <a class="fd-day-pill {% if active_day == 'today' %}active{% endif %}" href="{{ url_for('manifest.home', day='today') }}">Today</a>
+            <a class="fd-day-pill {% if active_day == 'tomorrow' %}active{% endif %}" href="{{ url_for('manifest.home', day='tomorrow') }}">Tomorrow</a>
+        </div>
+
+        <div class="fd-actions">
+            <a href="{{ url_for('manifest.refresh_snapshot', day=active_day) }}" class="secondary-btn fd-action-btn">Refresh day data</a>
+            <form method="POST" action="{{ url_for('manifest.send_pickup_day') }}" style="margin:0;">
+                <input type="hidden" name="day" value="{{ active_day }}">
+                <button type="submit" class="secondary-btn fd-action-btn" onclick="return confirm('Send pickup information for the whole {{ active_day }} schedule?')">Send pickup for all stays</button>
+            </form>
+            <form id="cancel-day-form" method="POST" action="/cancellations/cancel-day" style="margin:0;">
+                <input type="hidden" name="day" value="{{ active_day }}">
+                <input type="hidden" name="reason" id="cancel-day-reason" value="other">
+                <button type="button" class="export-btn fd-action-btn" onclick="openCancelModal('cancel-day-form','whole {{ active_day }} schedule')">Cancel whole day</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="fd-grid">
+        <div class="fd-stat"><div class="fd-stat-label">Flights</div><div class="fd-stat-value">{{ stats.flights }}</div><div class="fd-stat-sub">{{ stats.cancelled_flights }} cancelled</div></div>
+        <div class="fd-stat"><div class="fd-stat-label">Orders</div><div class="fd-stat-value">{{ stats.orders }}</div><div class="fd-stat-sub">Live bookings loaded</div></div>
+        <div class="fd-stat"><div class="fd-stat-label">Passengers</div><div class="fd-stat-value">{{ stats.passengers }}</div><div class="fd-stat-sub">{{ stats.cancelled_passengers }} cancelled</div></div>
+        <div class="fd-stat"><div class="fd-stat-label">Revenue</div><div class="fd-stat-value">${{ stats.revenue }}</div><div class="fd-stat-sub">Gross booked value</div></div>
+        <div class="fd-stat"><div class="fd-stat-label">Refund exposure</div><div class="fd-stat-value">${{ stats.refunds }}</div><div class="fd-stat-sub">Based on cancelled pax</div></div>
+    </section>
+
+    {% if error %}
+    <section class="fd-empty">
+        <h3 style="margin-top:0;">Could not load Flight Deck</h3>
+        <p style="margin-bottom:0;">{{ error }}</p>
+    </section>
+    {% endif %}
+
+    {% if manifests %}
+        {% for manifest in manifests %}
+        <section class="fd-flight {% if manifest.is_cancelled %}cancelled{% endif %}">
+            <div class="fd-flight-top">
+                <div>
+                    <div class="fd-kicker">{% if manifest.is_cancelled %}Cancelled flight{% else %}Flight ready{% endif %}</div>
+                    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                        <h2 class="fd-flight-time">{{ manifest.slot }}</h2>
+                        {% if manifest.is_cancelled %}<span class="fd-chip dark">Cancelled</span>{% endif %}
+                        <span class="fd-chip">{{ manifest.total_pax }} pax</span>
+                    </div>
+                    <div class="fd-flight-full">{{ manifest.slot_display_full }}</div><div class="fd-flight-meta-inline">{{ (manifest.pickup_summary or [])|length }} pickup locations · {% if manifest.total_weight is not none %}{{ manifest.total_weight }} kg total weight{% else %}Weight pending{% endif %}</div>
+                    {% if not manifest.is_cancelled and manifest.slot_iso %}
+                    <div class="fd-countdown" data-slot="{{ manifest.slot_iso }}">Loading countdown…</div>
+                    {% endif %}
+                </div>
+
+                <div class="fd-flight-ops">
+                    <a href="{{ url_for('manifest.export_pdf', day=active_day, slot=manifest.slot_iso) }}" class="secondary-btn fd-action-btn">Export PDF</a>
+                    <form method="POST" action="{{ url_for('manifest.send_pickup_flight') }}" style="margin:0;">
+                        <input type="hidden" name="day" value="{{ active_day }}">
+                        <input type="hidden" name="slot" value="{{ manifest.slot_display_full }}">
+                        <button type="submit" class="secondary-btn fd-action-btn" onclick="return confirm('Send pickup information for the whole {{ manifest.slot_display_full|e }} flight?')">Send flight pickup</button>
+                    </form>
+                    <form id="cancel-flight-{{ loop.index }}" method="POST" action="/cancellations/cancel-flight" style="margin:0;">
+                        <input type="hidden" name="slot" value="{{ manifest.slot_display_full }}">
+                        <input type="hidden" name="day" value="{{ active_day }}">
+                        <input type="hidden" name="reason" class="cancel-reason" value="other">
+                        <button type="button" class="export-btn fd-action-btn" onclick="openCancelModal('cancel-flight-{{ loop.index }}','{{ manifest.slot_display_full|e }}')">Cancel whole flight</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="fd-orders">
+                {% for order in manifest.orders %}
+                <article class="fd-order {% if order.is_cancelled %}cancelled{% endif %}">
+                    <div style="min-width:0;flex:1;">
+                        <div class="fd-order-head">
+                            <div>
+                                <h3 class="fd-order-name">{{ order.customer_name }}</h3>
+                                <div class="fd-order-sub">{{ order.product_name or manifest.product_name or "Reef & Island Scenic Flight" }} · {{ order.order_number }}</div>
+                            </div>
+                            <div class="order-chip-row">
+                                <span class="fd-chip">{{ order.pax_total }} pax</span>
+                                {% if order.is_cancelled %}<span class="fd-chip dark">Cancelled</span>{% endif %}
+                            </div>
+                        </div>
+
+                        <div class="fd-meta-grid" style="margin-top:14px;">
+                            <div class="fd-meta-item"><div class="fd-stat-label">Pickup</div><div class="fd-meta-value">{{ order.pickup_time or "No pickup time" }} · {{ order.pickup_location or "No pickup location" }}</div></div>
+                            <div class="fd-meta-item"><div class="fd-stat-label">Email</div><div class="fd-meta-value">{{ order.email or "No email" }}</div></div>
+                            <div class="fd-meta-item"><div class="fd-stat-label">Mobile</div><div class="fd-meta-value">{{ order.mobile or "No phone" }}</div></div>
+                            <div class="fd-meta-item"><div class="fd-stat-label">Order</div><div class="fd-meta-value">{{ order.order_weight_total or order.total_weight or '-' }} kg total · {{ order.pax_total }} pax</div></div>
+                        </div>
+
+                        {% if order.passengers %}
+                        <div class="fd-passengers" style="margin-top:14px;">
+                            {% for pax in order.passengers %}
+                            <div class="fd-pax">
+                                <div class="fd-pax-name">{{ pax.name }}</div>
+                                <div class="fd-pax-lines">
+                                    {% if pax.weight_lines %}{{ pax.weight_lines|join(' · ') }}<br>{% elif pax.weight %}{{ pax.weight }} kg<br>{% endif %}
+                                    Email: {{ pax.email or order.email or 'No email' }}<br>
+                                    Mobile: {{ pax.mobile or order.mobile or 'No phone' }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="fd-order-actions" style="flex-direction:column;align-items:stretch;min-width:200px;">
+                        <form method="POST" action="{{ url_for('manifest.send_pickup', order_number=order.order_number) }}" style="margin:0; width:100%;">
+                            <input type="hidden" name="day" value="{{ active_day }}">
+                            <button type="submit" class="secondary-btn fd-action-btn" style="width:100%;">Send pickup info</button>
+                        </form>
+                        <form id="cancel-order-{{ order.order_number }}" method="POST" action="/cancellations/cancel-order/{{ order.order_number }}" style="margin:0; width:100%;">
+                            <input type="hidden" name="day" value="{{ active_day }}">
+                            <input type="hidden" name="reason" class="cancel-reason" value="other">
+                            <button type="button" class="export-btn fd-action-btn" style="width:100%;" onclick="openCancelModal('cancel-order-{{ order.order_number }}','{{ order.customer_name|e }} · {{ order.order_number|e }}')">Cancel pax</button>
+                        </form>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+    {% else %}
+    <section class="fd-empty">
+        <h3 style="margin-top:0;">No flights found</h3>
+        <p style="margin-bottom:0;">There are no flights loaded for {{ active_day }}.</p>
+    </section>
+    {% endif %}
+</div>
+
+<div class="fd-modal" id="cancel-modal">
+    <div class="fd-modal-card">
+        <h3 style="margin:0 0 8px 0;">Choose cancellation reason</h3>
+        <p id="cancel-modal-copy" style="margin:0; color: var(--text-soft);">Are you sure?</p>
+        <div class="fd-modal-actions">
+            <button type="button" class="export-btn fd-action-btn" onclick="submitCancelReason('weather')">Weather</button>
+            <button type="button" class="secondary-btn fd-action-btn" onclick="submitCancelReason('other')">Other</button>
+            <button type="button" class="secondary-btn fd-action-btn" onclick="closeCancelModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let activeCancelForm = null;
+function openCancelModal(formId, itemLabel) {
+    activeCancelForm = document.getElementById(formId);
+    document.getElementById('cancel-modal-copy').innerText = `Are you sure you want to cancel ${itemLabel}?`;
+    document.getElementById('cancel-modal').style.display = 'flex';
+}
+function closeCancelModal() {
+    document.getElementById('cancel-modal').style.display = 'none';
+    activeCancelForm = null;
+}
+function submitCancelReason(reason) {
+    if (!activeCancelForm) return;
+    const reasonField = activeCancelForm.querySelector('.cancel-reason') || document.getElementById('cancel-day-reason');
+    if (reasonField) reasonField.value = reason;
+    activeCancelForm.submit();
+}
+(function() {
+    function updateCountdowns() {
+        const now = new Date();
+        document.querySelectorAll('.fd-countdown').forEach(el => {
+            const iso = el.getAttribute('data-slot');
+            if (!iso) return;
+            const target = new Date(iso);
+            if (isNaN(target.getTime())) { el.textContent = 'Countdown unavailable'; return; }
+            const diff = target - now;
+            if (diff <= 0) { el.textContent = 'Flight time passed'; el.classList.add('danger'); return; }
+            el.classList.remove('danger');
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            el.textContent = `Flight in ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        });
+    }
+    updateCountdowns();
+    setInterval(updateCountdowns, 1000);
+})();
+</script>
+{% endblock %}

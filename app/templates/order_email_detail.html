@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="manifest-header-v2">
+    <div>
+        <p class="manifest-kicker">ORDER EMAIL DETAIL</p>
+        <h1 class="manifest-title">{{ detail.customer_name or 'Customer' }}</h1>
+        <p class="manifest-subtitle">Missive order conversation with enriched booking detail.</p>
+    </div>
+</section>
+
+<div class="flight-group-card" style="padding:24px;margin-bottom:22px;">
+    <h2 style="margin-top:0;">Order Summary</h2>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:14px;">
+        <div><strong>Order Number:</strong> {{ detail.order_number or '-' }}</div>
+        <div><strong>Status:</strong> {{ detail.status or '-' }}</div>
+        <div><strong>Agent:</strong> {{ detail.agent or '-' }}</div>
+        <div><strong>Email:</strong> {{ detail.email or '-' }}</div>
+        <div><strong>Mobile:</strong> {{ detail.mobile or '-' }}</div>
+        <div><strong>Pickup Location:</strong> {{ detail.pickup_location or '-' }}</div>
+        <div><strong>Pickup Time:</strong> {{ detail.pickup_time or '-' }}</div>
+        <div><strong>Total Pax:</strong> {{ detail.passengers|length if detail.passengers else 0 }}</div>
+    </div>
+</div>
+
+<div class="flight-group-card" style="padding:24px;margin-bottom:22px;">
+    <h2 style="margin-top:0;">Passengers</h2>
+    {% if detail.passengers %}
+        <div style="display:flex;flex-direction:column;gap:14px;">
+            {% for pax in detail.passengers %}
+            <div class="manifest-line" style="padding:16px 18px;background:#fff;border-radius:16px;">
+                <div style="font-weight:700;">{{ pax.name or 'Passenger' }}</div>
+                {% if pax.weight %}<div class="manifest-meta" style="margin-top:4px;">Weight: {{ pax.weight }} kg</div>{% endif %}
+                {% if pax.email %}<div class="manifest-meta" style="margin-top:4px;">Email: {{ pax.email }}</div>{% endif %}
+                {% if pax.mobile %}<div class="manifest-meta" style="margin-top:4px;">Mobile: {{ pax.mobile }}</div>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="manifest-meta">No passenger detail found.</div>
+    {% endif %}
+</div>
+
+<a href="/orders" class="secondary-btn">← Back to orders</a>
+{% endblock %}

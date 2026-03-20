@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opsly</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div>
+                <div class="brand">
+                    <div class="brand-icon">O</div>
+                    <div>
+                        <h1>Opsly</h1>
+                        <p>AI Operations Console</p>
+                    </div>
+                </div>
+
+                <nav class="sidebar-nav">
+                    <a href="/" class="nav-link">Dashboard</a>
+                    <a href="/monitoring" class="nav-link">Monitoring</a>
+                    <a href="/orders/" class="nav-link">Orders</a>
+                    <a href="/manifest/?day=today" class="nav-link">Manifests</a>
+                    <a href="/cancellations/?day=today" class="nav-link">Cancellations</a>
+                    <a href="/communications/" class="nav-link">Communications</a>
+                    <a href="/rosters" class="nav-link">Rosters</a>
+                    <a href="/logout" class="nav-link logout-link">Logout</a>
+                </nav>
+            </div>
+
+            <div class="sidebar-footer">
+                <p>Opsly Admin</p>
+                <span>AI-assisted flight operations</span>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            {% with messages = get_flashed_messages() %}
+              {% if messages %}
+                {% for message in messages %}
+                  <div class="flash">{{ message }}</div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="manifest-header-v2" style="margin-bottom:22px;">
+    <div>
+        <p class="manifest-kicker">MONITORING DEBUG</p>
+        <h1 class="manifest-title">Customer Debug</h1>
+        <p class="manifest-subtitle">Readable debug view with raw JSON toggle.</p>
+    </div>
+    <div class="flight-group-card" style="padding:20px;min-width:320px;">
+        <div class="manifest-kicker">LOOKUP</div>
+        <div style="font-size:28px;font-weight:800;margin-top:8px;">{{ order_number }}</div>
+        <div class="manifest-meta" style="margin-top:8px;">{{ customer_name or "Unknown customer" }}</div>
+        <div style="margin-top:12px;"><span class="manifest-chip" style="background:#a94442;color:#fff;">{{ status|upper }}</span></div>
+    </div>
+</section>
+
+<div style="display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:16px;margin-bottom:22px;">
+    <div class="summary-box" style="padding:18px;"><span>Order</span><strong style="display:block;font-size:32px;margin-top:8px;">{{ order_number }}</strong></div>
+    <div class="summary-box" style="padding:18px;"><span>Customer</span><strong style="display:block;font-size:22px;margin-top:8px;line-height:1.15;">{{ customer_name or "-" }}</strong></div>
+    <div class="summary-box" style="padding:18px;"><span>Email</span><strong style="display:block;font-size:18px;margin-top:8px;line-height:1.2;">{{ email or "-" }}</strong></div>
+    <div class="summary-box" style="padding:18px;"><span>Mobile</span><strong style="display:block;font-size:22px;margin-top:8px;">{{ mobile or "-" }}</strong></div>
+</div>
+
+<div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:22px;margin-bottom:22px;">
+    <div class="flight-group-card" style="padding:24px;">
+        <div class="manifest-kicker">SUMMARY</div>
+        <h2 style="margin:8px 0 18px 0;">Parsed data</h2>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:14px;">
+            <div class="summary-box" style="padding:16px;"><span>Status</span><strong style="display:block;font-size:30px;margin-top:8px;">{{ status or "-" }}</strong></div>
+            <div class="summary-box" style="padding:16px;"><span>Source</span><strong style="display:block;font-size:22px;margin-top:8px;">{{ source_used or "-" }}</strong></div>
+            <div class="summary-box" style="padding:16px;"><span>Pickup</span><strong style="display:block;font-size:22px;margin-top:8px;line-height:1.15;">{{ pickup_location or "-" }}</strong></div>
+            <div class="summary-box" style="padding:16px;"><span>Pickup Time</span><strong style="display:block;font-size:26px;margin-top:8px;">{{ pickup_time or "-" }}</strong></div>
+            <div class="summary-box" style="padding:16px;"><span>Pickup Date</span><strong style="display:block;font-size:22px;margin-top:8px;">{{ pickup_date or "-" }}</strong></div>
+            <div class="summary-box" style="padding:16px;"><span>Passengers</span><strong style="display:block;font-size:30px;margin-top:8px;">{{ passengers|length if passengers else 0 }}</strong></div>
+        </div>
+    </div>
+
+    <div class="flight-group-card" style="padding:24px;">
+        <div class="manifest-kicker">ACTIONS</div>
+        <h2 style="margin:8px 0 18px 0;">Quick links</h2>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <a class="export-btn" href="/monitoring/debug/customer/{{ order_number }}">Reload debug</a>
+            <a class="secondary-btn" href="/monitoring">Back to monitoring</a>
+            <a class="secondary-btn" href="/manifest/?day=today">Open today manifest</a>
+        </div>
+    </div>
+</div>
+
+<div class="flight-group-card" style="padding:24px;margin-bottom:22px;">
+    <div class="manifest-kicker">PASSENGERS</div>
+    <h2 style="margin:8px 0 18px 0;">Passenger list</h2>
+    {% if passengers %}
+    <div style="display:flex;flex-direction:column;gap:14px;">
+        {% for pax in passengers %}
+        <div class="manifest-line" style="padding:16px 18px;background:#fff;border-radius:18px;">
+            <div style="font-weight:800;font-size:20px;">{{ pax.name or "Passenger" }}</div>
+            {% if pax.email %}<div class="manifest-meta" style="margin-top:6px;">Email: {{ pax.email }}</div>{% endif %}
+            {% if pax.mobile %}<div class="manifest-meta" style="margin-top:6px;">Mobile: {{ pax.mobile }}</div>{% endif %}
+            {% if pax.weight %}<div class="manifest-meta" style="margin-top:6px;">Weight: {{ pax.weight }} kg</div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="manifest-meta">No passenger data found.</div>
+    {% endif %}
+</div>
+
+<div class="flight-group-card" style="padding:24px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div>
+            <div class="manifest-kicker">RAW JSON</div>
+            <h2 style="margin:8px 0 0 0;">Payloads</h2>
+        </div>
+        <button type="button" class="export-btn" onclick="toggleRawJson()">Show / Hide JSON</button>
+    </div>
+
+    <div id="raw-json-wrap" style="display:none;margin-top:18px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;">
+            <div>
+                <h3 style="margin-bottom:10px;">Rezdy today</h3>
+                <pre style="white-space:pre-wrap;background:#fff;padding:16px;border-radius:18px;overflow:auto;max-height:520px;">{{ rezdy_today_json }}</pre>
+            </div>
+            <div>
+                <h3 style="margin-bottom:10px;">Rezdy tomorrow</h3>
+                <pre style="white-space:pre-wrap;background:#fff;padding:16px;border-radius:18px;overflow:auto;max-height:520px;">{{ rezdy_tomorrow_json }}</pre>
+            </div>
+            <div>
+                <h3 style="margin-bottom:10px;">Merged</h3>
+                <pre style="white-space:pre-wrap;background:#fff;padding:16px;border-radius:18px;overflow:auto;max-height:520px;">{{ merged_json }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleRawJson() {
+    const el = document.getElementById('raw-json-wrap');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="manifest-header-v2" style="margin-bottom:22px;">
+    <div>
+        <p class="manifest-kicker">OPS OVERVIEW</p>
+        <h1 class="manifest-title">Dashboard</h1>
+        <p class="manifest-subtitle">Today, tomorrow and total performance across revenue, cancellations and fees.</p>
+    </div>
+    <div class="flight-group-card" style="padding:22px;min-width:280px;">
+        <div class="manifest-kicker">BRISBANE</div>
+        <div id="brisbane-time" class="flight-time" style="font-size:54px;line-height:1;margin-top:10px;">--:--</div>
+        <div id="brisbane-date" class="manifest-meta" style="margin-top:10px;font-size:18px;">Loading date...</div>
+    </div>
+</section>
+
+<section class="flight-group-card" style="padding:26px;margin-bottom:22px;background:linear-gradient(135deg,#f7f1ea 0%,#efe5d7 100%);border:1px solid rgba(111,74,45,0.08);">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;">
+        <div>
+            <div class="manifest-kicker">MONEY</div>
+            <h2 style="margin:8px 0 6px 0;font-size:38px;line-height:1.05;">Income vs Costs</h2>
+            <p class="manifest-meta" style="max-width:760px;">Booked income, lost revenue and GYG fees for today and tomorrow combined.</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <a class="export-btn" href="/manifest/?day=today">Today</a>
+            <a class="export-btn" href="/manifest/?day=tomorrow">Tomorrow</a>
+            <a class="secondary-btn" href="/manifest/refresh?day=today">Refresh Today</a>
+            <a class="secondary-btn" href="/manifest/refresh?day=tomorrow">Refresh Tomorrow</a>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:24px;margin-top:22px;align-items:center;">
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:16px;">
+            <div class="summary-box" style="padding:20px;border-radius:22px;background:#fff;">
+                <span>Income</span>
+                <strong id="total-income" style="display:block;font-size:46px;margin-top:8px;">$0</strong>
+                <div class="manifest-meta" style="margin-top:4px;">Booked revenue</div>
+            </div>
+            <div class="summary-box" style="padding:20px;border-radius:22px;background:#fff;">
+                <span>Outcome</span>
+                <strong id="total-outcome" style="display:block;font-size:46px;margin-top:8px;">$0</strong>
+                <div class="manifest-meta" style="margin-top:4px;">Lost revenue + fees</div>
+            </div>
+            <div class="summary-box" style="padding:20px;border-radius:22px;background:#fff;">
+                <span>GYG Fees</span>
+                <strong id="total-gyg" style="display:block;font-size:46px;margin-top:8px;">$0</strong>
+                <div class="manifest-meta" style="margin-top:4px;">25% cancelled orders</div>
+            </div>
+            <div class="summary-box" style="padding:20px;border-radius:22px;background:#fff;">
+                <span>Net</span>
+                <strong id="total-net" style="display:block;font-size:46px;margin-top:8px;">$0</strong>
+                <div class="manifest-meta" style="margin-top:4px;">Income minus outcome</div>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:center;">
+            <div style="display:flex;justify-content:center;align-items:center;background:#fff;border-radius:22px;padding:18px;">
+                <canvas id="moneyChart" width="260" height="260"></canvas>
+            </div>
+            <div style="display:flex;justify-content:center;align-items:center;background:#fff;border-radius:22px;padding:18px;">
+                <canvas id="feesChart" width="260" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px;margin-bottom:22px;">
+    <article class="flight-group-card" style="padding:24px;">
+        <div class="manifest-kicker">TODAY</div>
+        <h2 style="margin:8px 0 18px 0;font-size:34px;line-height:1.05;">Today</h2>
+        <div style="display:grid;grid-template-columns:1fr;gap:14px;">
+            <div class="summary-box" style="padding:18px;"><span>Cancelled Flights</span><strong id="today-cancelled-flights" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Cancelled Pax</span><strong id="today-cancelled-passengers" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Booked Flights</span><strong id="today-booked-flights" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Booked Pax</span><strong id="today-booked-passengers" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Revenue Lost</span><strong id="today-revenue-lost" style="display:block;font-size:42px;margin-top:8px;">$0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>GYG Fees</span><strong id="today-gyg-fees" style="display:block;font-size:42px;margin-top:8px;">$0</strong></div>
+        </div>
+    </article>
+
+    <article class="flight-group-card" style="padding:24px;">
+        <div class="manifest-kicker">TOMORROW</div>
+        <h2 style="margin:8px 0 18px 0;font-size:34px;line-height:1.05;">Tomorrow</h2>
+        <div style="display:grid;grid-template-columns:1fr;gap:14px;">
+            <div class="summary-box" style="padding:18px;"><span>Cancelled Flights</span><strong id="tomorrow-cancelled-flights" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Cancelled Pax</span><strong id="tomorrow-cancelled-passengers" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Booked Flights</span><strong id="tomorrow-booked-flights" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Booked Pax</span><strong id="tomorrow-booked-passengers" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Revenue Lost</span><strong id="tomorrow-revenue-lost" style="display:block;font-size:42px;margin-top:8px;">$0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>GYG Fees</span><strong id="tomorrow-gyg-fees" style="display:block;font-size:42px;margin-top:8px;">$0</strong></div>
+        </div>
+    </article>
+
+    <article class="flight-group-card" style="padding:24px;">
+        <div class="manifest-kicker">TOTAL</div>
+        <h2 style="margin:8px 0 18px 0;font-size:34px;line-height:1.05;">Combined</h2>
+        <div style="display:grid;grid-template-columns:1fr;gap:14px;">
+            <div class="summary-box" style="padding:18px;"><span>Cancelled Flights</span><strong id="total-cancelled-flights" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Cancelled Pax</span><strong id="total-cancelled-passengers" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Booked Flights</span><strong id="total-booked-flights" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Booked Pax</span><strong id="total-booked-passengers" style="display:block;font-size:42px;margin-top:8px;">0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Revenue Lost</span><strong id="total-revenue-lost" style="display:block;font-size:42px;margin-top:8px;">$0</strong></div>
+            <div class="summary-box" style="padding:18px;"><span>Ticket Price</span><strong id="ticket-price" style="display:block;font-size:42px;margin-top:8px;">$0</strong></div>
+        </div>
+    </article>
+</section>
+
+<section class="flight-group-card" style="padding:24px;">
+    <div class="manifest-kicker">VISUALS</div>
+    <h2 style="margin:8px 0 20px 0;font-size:34px;line-height:1.05;">Today vs Tomorrow</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px;align-items:center;">
+        <div style="display:flex;justify-content:center;background:#fff;border-radius:22px;padding:16px;">
+            <canvas id="cancelChart" width="360" height="260"></canvas>
+        </div>
+        <div style="display:flex;justify-content:center;background:#fff;border-radius:22px;padding:16px;">
+            <canvas id="opsChart" width="360" height="260"></canvas>
+        </div>
+        <div style="display:flex;justify-content:center;background:#fff;border-radius:22px;padding:16px;">
+            <canvas id="moneyBars" width="360" height="260"></canvas>
+        </div>
+    </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+    function money(n){ return '$' + Number(n || 0).toLocaleString(); }
+
+    function updateBrisbaneTime(){
+        const now = new Date();
+        const timeEl = document.getElementById('brisbane-time');
+        const dateEl = document.getElementById('brisbane-date');
+        if (!timeEl || !dateEl) return;
+        timeEl.textContent = new Intl.DateTimeFormat('en-AU', {
+            timeZone: 'Australia/Brisbane',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).format(now);
+        dateEl.textContent = new Intl.DateTimeFormat('en-AU', {
+            timeZone: 'Australia/Brisbane',
+            weekday: 'long',
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric'
+        }).format(now);
+    }
+    updateBrisbaneTime();
+    setInterval(updateBrisbaneTime, 1000);
+
+    fetch('/manifest/ops-summary')
+        .then(r => r.json())
+        .then(data => {
+            const today = data.today || {};
+            const tomorrow = data.tomorrow || {};
+            const total = data.total || {};
+            const ticketPrice = data.ticket_price || 0;
+
+            document.getElementById('today-cancelled-flights').textContent = today.cancelled_flights || 0;
+            document.getElementById('today-cancelled-passengers').textContent = today.cancelled_passengers || 0;
+            document.getElementById('today-booked-flights').textContent = today.booked_flights || 0;
+            document.getElementById('today-booked-passengers').textContent = today.booked_passengers || 0;
+            document.getElementById('today-revenue-lost').textContent = money(today.revenue_lost);
+            document.getElementById('today-gyg-fees').textContent = money(today.gyg_fees);
+
+            document.getElementById('tomorrow-cancelled-flights').textContent = tomorrow.cancelled_flights || 0;
+            document.getElementById('tomorrow-cancelled-passengers').textContent = tomorrow.cancelled_passengers || 0;
+            document.getElementById('tomorrow-booked-flights').textContent = tomorrow.booked_flights || 0;
+            document.getElementById('tomorrow-booked-passengers').textContent = tomorrow.booked_passengers || 0;
+            document.getElementById('tomorrow-revenue-lost').textContent = money(tomorrow.revenue_lost);
+            document.getElementById('tomorrow-gyg-fees').textContent = money(tomorrow.gyg_fees);
+
+            document.getElementById('total-cancelled-flights').textContent = total.cancelled_flights || 0;
+            document.getElementById('total-cancelled-passengers').textContent = total.cancelled_passengers || 0;
+            document.getElementById('total-booked-flights').textContent = total.booked_flights || 0;
+            document.getElementById('total-booked-passengers').textContent = total.booked_passengers || 0;
+            document.getElementById('total-revenue-lost').textContent = money(total.revenue_lost);
+            document.getElementById('ticket-price').textContent = money(ticketPrice);
+
+            document.getElementById('total-income').textContent = money(total.income);
+            document.getElementById('total-outcome').textContent = money(total.outcome);
+            document.getElementById('total-gyg').textContent = money(total.gyg_fees);
+            document.getElementById('total-net').textContent = money(total.net);
+
+            new Chart(document.getElementById('moneyChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Income', 'Outcome', 'GYG Fees'],
+                    datasets: [{
+                        data: [total.income || 0, total.outcome || 0, total.gyg_fees || 0],
+                        backgroundColor: ['#6f4a2d', '#c78c56', '#eadacc'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: false,
+                    cutout: '62%',
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            new Chart(document.getElementById('feesChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Today Fees', 'Tomorrow Fees', 'Total Fees'],
+                    datasets: [{
+                        data: [today.gyg_fees || 0, tomorrow.gyg_fees || 0, total.gyg_fees || 0],
+                        backgroundColor: ['#8a5a31', '#d39b61', '#f0e2d2'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: false,
+                    cutout: '62%',
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            new Chart(document.getElementById('cancelChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Today', 'Tomorrow'],
+                    datasets: [
+                        { label: 'Cancelled Flights', data: [today.cancelled_flights || 0, tomorrow.cancelled_flights || 0] },
+                        { label: 'Cancelled Pax', data: [today.cancelled_passengers || 0, tomorrow.cancelled_passengers || 0] }
+                    ]
+                },
+                options: { responsive: false, plugins: { legend: { position: 'bottom' } } }
+            });
+
+            new Chart(document.getElementById('opsChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Today', 'Tomorrow'],
+                    datasets: [
+                        { label: 'Booked Flights', data: [today.booked_flights || 0, tomorrow.booked_flights || 0] },
+                        { label: 'Booked Pax', data: [today.booked_passengers || 0, tomorrow.booked_passengers || 0] }
+                    ]
+                },
+                options: { responsive: false, plugins: { legend: { position: 'bottom' } } }
+            });
+
+            new Chart(document.getElementById('moneyBars'), {
+                type: 'bar',
+                data: {
+                    labels: ['Today', 'Tomorrow'],
+                    datasets: [
+                        { label: 'Revenue Lost', data: [today.revenue_lost || 0, tomorrow.revenue_lost || 0] },
+                        { label: 'GYG Fees', data: [today.gyg_fees || 0, tomorrow.gyg_fees || 0] }
+                    ]
+                },
+                options: { responsive: false, plugins: { legend: { position: 'bottom' } } }
+            });
+        })
+        .catch(() => {});
+})();
+</script>
+{% endblock %}

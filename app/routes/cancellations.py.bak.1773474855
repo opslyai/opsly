@@ -1,0 +1,382 @@
+from threading import Thread, Lock
+from datetime import datetime
+import json
+import os
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask_login import login_required
+
+from app.services.rezdy import get_bookings_for_day, get_order_detail
+from app.services.missive import send_email
+from app.services.ops_state import rebuild_ops_state_from_manifests, apply_ops_state_to_manifests, mark_whole_day_cancelled, mark_flight_cancelled, mark_order_cancelled, load_ops_state, dashboard_stats
+
+cancellations = Blueprint("cancellations", __name__, url_prefix="/cancellations")
+
+STATE_FILE = os.path.expanduser("~/opsly/instance/cancellation_state.json")
+STATE_LOCK = Lock()
+
+
+def _ensure_state_file():
+    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+    if not os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+
+
+def _load_state():
+    _ensure_state_file()
+    with STATE_LOCK:
+        try:
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+
+def _save_state(state):
+    _ensure_state_file()
+    with STATE_LOCK:
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2)
+
+
+def _day_key(day):
+    return "tomorrow" if str(day).strip().lower() == "tomorrow" else "today"
+
+
+def _mark_order_cancelled(day, order_number, email="", reason="other", status="sent", error=""):
+    state = _load_state()
+    day = _day_key(day)
+
+    if day not in state:
+        state[day] = {}
+
+    state[day][order_number] = {
+        "status": status,
+        "email": email,
+        "reason": reason,
+        "error": error,
+        "updated_at": datetime.utcnow().isoformat()
+    }
+
+    _save_state(state)
+
+
+def _get_order_state(day, order_number):
+    state = _load_state()
+    day = _day_key(day)
+    return state.get(day, {}).get(order_number, {})
+
+
+def _walk(obj):
+    if isinstance(obj, dict):
+        yield obj
+        for v in obj.values():
+            yield from _walk(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            yield from _walk(item)
+
+
+def _extract_email(order_detail):
+    if not order_detail:
+        return ""
+
+    invalid_values = {"", "no email", "none", "null", "n/a", "-"}
+
+    keys = [
+        "order_email",
+        "email",
+        "customerEmail",
+        "customer_email",
+        "contactEmail",
+        "contact_email",
+        "billingEmail",
+        "billing_email",
+        "leadEmail",
+        "lead_email",
+    ]
+
+    for node in _walk(order_detail):
+        if not isinstance(node, dict):
+            continue
+        for key in keys:
+            value = node.get(key)
+            if value is None:
+                continue
+            value = str(value).strip()
+            if value.lower() in invalid_values:
+                continue
+            if "@" in value:
+                return value
+
+    return ""
+def _extract_name(order_detail):
+    if not order_detail:
+        return "Customer"
+
+    for node in _walk(order_detail):
+        if not isinstance(node, dict):
+            continue
+        for key in ["customer_name", "customerName", "order_name", "name"]:
+            value = node.get(key)
+            if value:
+                return str(value).strip()
+
+    return "Customer"
+
+
+def _email_subject(reason):
+    return "Flight Cancelled due Poor Weather" if reason == "weather" else "Flight Cancelled"
+
+
+def _email_body(name, order_number):
+    return f"""
+<div>Hello {name},</div>
+<br>
+<div>We’re very sorry to inform you that we unfortunately have to cancel your upcoming scenic flight booking.</div>
+<br>
+<div>This decision is never taken lightly. Aviation operations are heavily dependent on weather conditions and operational requirements, and safety must always remain our top priority. We completely understand how disappointing this news can be, especially if you have planned your visit around this experience.</div>
+<br>
+<div>At the moment, we do not have any availability until <strong>20 March 2026</strong>.</div>
+<br>
+<div>If this date works for you, we would be very happy to move your booking across to that flight.</div>
+<br>
+<div>If the new date does not suit your schedule, we can also arrange a full refund.</div>
+<br>
+<div>Please reply to this email to let us know which option you would prefer.</div>
+<br>
+<div><strong>Your order number is:</strong> {order_number}</div>
+<br>
+<div>Kind Regards,</div>
+<div>Ed</div>
+<div>Whitsunday Air Tours</div>
+"""
+
+
+def _send_cancel_email(order_number, reason, day):
+    day_offset = 1 if _day_key(day) == "tomorrow" else 0
+    detail = get_order_detail(order_number, day_offset=day_offset)
+
+    email = _extract_email(detail)
+    name = _extract_name(detail)
+
+    if not email:
+        _mark_order_cancelled(day, order_number, email="", reason=reason, status="failed", error="No email found")
+        return False, "No email found"
+
+    subject = _email_subject(reason)
+    body = _email_body(name, order_number)
+
+    try:
+        send_email(email, subject, body)
+        _mark_order_cancelled(day, order_number, email=email, reason=reason, status="sent", error="")
+        return True, email
+    except Exception as e:
+        _mark_order_cancelled(day, order_number, email=email, reason=reason, status="failed", error=str(e))
+        return False, str(e)
+
+
+def _attach_emails(manifests, day):
+    day_offset = 1 if _day_key(day) == "tomorrow" else 0
+
+    for manifest in manifests:
+        sent_count = 0
+        order_count = 0
+
+        for order in manifest.get("orders", []):
+            order_number = order.get("order_number")
+            order_count += 1
+
+            try:
+                detail = get_order_detail(order_number, day_offset=day_offset)
+                order["email"] = _extract_email(detail)
+            except Exception:
+                order["email"] = ""
+
+            order_state = _get_order_state(day, order_number)
+            order["is_cancelled"] = order_state.get("status") == "sent"
+            order["cancel_status"] = order_state.get("status", "")
+            order["cancel_reason"] = order_state.get("reason", "")
+            order["cancel_error"] = order_state.get("error", "")
+
+            if order["is_cancelled"]:
+                sent_count += 1
+
+        manifest["sent_cancel_count"] = sent_count
+        manifest["is_cancelled"] = order_count > 0 and sent_count == order_count
+
+    return manifests
+
+
+def _build_stats(manifests):
+    flights_cancelled = 0
+    passengers_cancelled = 0
+
+    for manifest in manifests:
+        if manifest.get("is_cancelled"):
+            flights_cancelled += 1
+
+        for order in manifest.get("orders", []):
+            if order.get("is_cancelled"):
+                passengers_cancelled += int(order.get("pax_total") or 0)
+
+    return {
+        "flights_cancelled": flights_cancelled,
+        "passengers_cancelled": passengers_cancelled
+    }
+
+
+def _send_bulk_cancellations(app, order_numbers, reason, day):
+    with app.app_context():
+        for order_number in order_numbers:
+            try:
+                _send_cancel_email(order_number, reason, day)
+            except Exception as e:
+                _mark_order_cancelled(day, order_number, email="", reason=reason, status="failed", error=str(e))
+                print(f"[CANCELLATION ERROR] {order_number}: {e}")
+
+
+@cancellations.route("/")
+@login_required
+def cancellations_home():
+    day = request.args.get("day", "today").lower().strip()
+    day_offset = 1 if day == "tomorrow" else 0
+    active_day = "tomorrow" if day_offset == 1 else "today"
+
+    error = None
+    manifests = []
+    stats = {
+        "flights_cancelled": 0,
+        "passengers_cancelled": 0
+    }
+
+    try:
+        manifests = get_bookings_for_day(day_offset=day_offset)
+        manifests = _attach_emails(manifests, active_day)
+        stats = _build_stats(manifests)
+    except Exception as e:
+        error = str(e)
+    whole_day_cancelled = (active_day == "today")
+    if whole_day_cancelled:
+        for manifest in manifests or []:
+            manifest["is_cancelled"] = True
+            for order in manifest.get("orders", []) or []:
+                order["is_cancelled"] = True
+        if isinstance(stats, dict):
+            stats["flights_cancelled"] = stats.get("flights_total", stats.get("flights_cancelled", 0)) or len(manifests or [])
+            stats["passengers_cancelled"] = stats.get("passengers_total", stats.get("passengers_cancelled", 0)) or sum(int((o.get("pax_total") or 0)) for m in (manifests or []) for o in (m.get("orders", []) or []))
+
+
+    return render_template(
+        "cancellations.html",
+        manifests=manifests,
+        stats=stats,
+        error=error,
+        active_day=active_day, whole_day_cancelled=whole_day_cancelled)
+
+
+@cancellations.route("/cancel_preview")
+@login_required
+def cancel_preview():
+    order_number = request.args.get("order_number")
+    day = request.args.get("day", "today").lower().strip()
+    day_offset = 1 if day == "tomorrow" else 0
+
+    detail = get_order_detail(order_number, day_offset=day_offset)
+
+    email = _extract_email(detail)
+    name = _extract_name(detail)
+
+    return jsonify({
+        "customer_name": name,
+        "customer_email": email,
+        "order_number": order_number
+    })
+
+
+@cancellations.route("/cancel-order/<order_number>", methods=["POST"])
+@login_required
+def cancel_order(order_number):
+    reason = request.form.get("reason", "other")
+    day = request.form.get("day", "today")
+
+    sent, result = _send_cancel_email(order_number, reason, day)
+
+    if sent:
+        mark_order_cancelled(day, order_number)
+        flash(f"Cancellation email sent to {result}")
+    else:
+        flash(f"Could not send email: {result}")
+
+    return redirect(url_for("cancellations.cancellations_home", day=day))
+
+
+@cancellations.route("/cancel-flight", methods=["POST"])
+@login_required
+def cancel_flight():
+    day = request.form.get("day", "today")
+    slot = request.form.get("slot")
+    reason = request.form.get("reason", "other")
+
+    day_offset = 1 if str(day).strip().lower() == "tomorrow" else 0
+
+    try:
+        manifests = get_bookings_for_day(day_offset=day_offset)
+    except Exception as e:
+        flash(f"Could not load bookings for {day}: {e}")
+        return redirect(url_for("cancellations.cancellations_home", day=day))
+
+    order_numbers = []
+
+    for manifest in manifests:
+        if manifest.get("slot_display_full") == slot:
+            for order in manifest.get("orders", []):
+                order_number = order.get("order_number")
+                if order_number:
+                    order_numbers.append(order_number)
+            break
+
+    app = current_app._get_current_object()
+
+    Thread(
+        target=_send_bulk_cancellations,
+        args=(app, order_numbers, reason, day),
+        daemon=True
+    ).start()
+
+    flash(f"Sending cancellation emails for flight {slot} to {len(order_numbers)} orders")
+    return redirect(url_for("cancellations.cancellations_home", day=day))
+
+
+@cancellations.route("/cancel-day", methods=["POST"])
+@login_required
+def cancel_day():
+    day = request.form.get("day", "today")
+    reason = request.form.get("reason", "other")
+
+    day_offset = 1 if str(day).strip().lower() == "tomorrow" else 0
+
+    try:
+        manifests = get_bookings_for_day(day_offset=day_offset)
+    except Exception as e:
+        flash(f"Could not load bookings for {day}: {e}")
+        return redirect(url_for("cancellations.cancellations_home", day=day))
+
+    order_numbers = []
+    for manifest in manifests:
+        for order in manifest.get("orders", []):
+            order_number = order.get("order_number")
+            if order_number:
+                order_numbers.append(order_number)
+
+    app = current_app._get_current_object()
+
+    Thread(
+        target=_send_bulk_cancellations,
+        args=(app, order_numbers, reason, day),
+        daemon=True
+    ).start()
+
+    flash(f"Sending cancellation emails for entire {day} schedule to {len(order_numbers)} orders")
+    return redirect(url_for("cancellations.cancellations_home", day=day))

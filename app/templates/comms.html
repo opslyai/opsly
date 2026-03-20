@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <p class="eyebrow">COMMUNICATIONS</p>
+    <h1>WAT Inbox</h1>
+    <p>Latest Missive inbox conversations.</p>
+</div>
+
+<div class="comms-list">
+    {% for convo in conversations %}
+    <a href="/communications/{{ convo.id }}" class="comms-card">
+        <div class="comms-card-top">
+            <div>
+                <h3>{{ convo.subject }}</h3>
+                <div class="comms-meta">
+                    <span class="comms-pill">From {{ convo.sender }}</span>
+                    {% if convo.order_number %}
+                    <span class="comms-pill">Order {{ convo.order_number }}</span>
+                    {% endif %}
+                    {% if convo.status == "cancelled" %}
+                    <span class="comms-pill status-cancelled">Cancelled</span>
+                    {% elif convo.status == "confirmed" %}
+                    <span class="comms-pill status-confirmed">Confirmed</span>
+                    {% endif %}
+                </div>
+            </div>
+            <span class="comms-arrow">→</span>
+        </div>
+
+        {% if convo.customer_name or convo.agent %}
+        <div class="summary-grid">
+            {% if convo.customer_name %}
+            <div><strong>Customer</strong><br>{{ convo.customer_name }}</div>
+            {% endif %}
+            {% if convo.agent %}
+            <div><strong>Agent</strong><br>{{ convo.agent }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <p class="comms-preview">{{ convo.preview }}</p>
+    </a>
+    {% else %}
+    <div class="empty-card">
+        <p>No conversations found.</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

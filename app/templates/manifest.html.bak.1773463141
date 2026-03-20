@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% if whole_day_cancelled %}
+<div class="flight-group-card" style="margin-bottom:20px;padding:20px;border:2px solid #b06836;background:#f7ebe3;">
+    <div class="manifest-kicker">SERVICE STATUS</div>
+    <div class="manifest-title" style="font-size:32px;">Whole Day Cancelled</div>
+    <div class="manifest-subtitle">All flights for this day have been cancelled and this is reflected across every flight below.</div>
+</div>
+{% endif %}
+
+<section class="manifest-header-v2">
+    <div>
+        <p class="manifest-kicker">OPSLY FLIGHT MANIFESTS</p>
+        <h1 class="manifest-title">Manifest Centre</h1>
+        <p class="manifest-subtitle">Loaded from a saved daily snapshot so customers stay visible even after cancellations.</p>
+    </div>
+
+    <div class="day-switcher">
+        <a href="/manifest/?day=today" class="day-pill {% if active_day == 'today' %}active{% endif %}">Today</a>
+        <a href="/manifest/?day=tomorrow" class="day-pill {% if active_day == 'tomorrow' %}active{% endif %}">Tomorrow</a>
+    </div>
+</section>
+
+{% if error %}
+<div class="flight-group-card"><div class="manifest-name">{{ error }}</div></div>
+{% elif manifests %}
+<section class="manifest-shell">
+    {% for manifest in manifests %}
+    <article class="flight-group-card">
+        <div class="flight-group-top">
+            <div>
+                <p class="flight-label">
+                    {% if manifest.is_cancelled %}CANCELLED FLIGHT{% elif manifest.departed and active_day == 'today' %}DEPARTED FLIGHT{% else %}UPCOMING FLIGHT{% endif %}
+                </p>
+                <h2 class="flight-time">{{ manifest.slot }}</h2>
+                <p class="flight-full">{{ manifest.slot_display_full }}</p>
+
+                <div class="summary-strip">
+                    <div class="summary-box">
+                        <span>Total pax</span>
+                        <strong>{{ manifest.total_pax }}</strong>
+                    </div>
+                    <div class="summary-box">
+                        <span>Total weight</span>
+                        <strong>{% if manifest.total_weight is not none %}{{ manifest.total_weight }} kg{% else %}Not available{% endif %}</strong>
+                    </div>
+                </div>
+
+                <div class="pickup-summary-list">
+                    <div class="pickup-summary-title">Pickups on this flight</div>
+                    {% for pickup in manifest.pickup_summary %}
+                    <div class="pickup-summary-item">{{ pickup.time }} · {{ pickup.location }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="flight-side-meta">
+                <div class="flight-status {% if manifest.is_cancelled %}passed{% elif manifest.departed and active_day == 'today' %}passed{% else %}live{% endif %}">
+                    {% if manifest.is_cancelled %}Cancelled{% elif manifest.departed and active_day == 'today' %}Flight time has passed{% else %}Flight pending{% endif %}
+                </div>
+                <div class="countdown-block">
+                    <span class="countdown-label">Time until departure</span>
+                    <div class="countdown-timer" data-slot="{{ manifest.slot_iso }}" data-day="{{ active_day }}" data-cancelled="{{ '1' if manifest.is_cancelled else '0' }}">--:--:--</div>
+                </div>
+                <a class="export-btn" href="/manifest/export?day={{ active_day }}&slot={{ manifest.slot_iso }}">Export PDF</a>
+            </div>
+        </div>
+
+        <div class="manifest-list">
+            {% for order in manifest.orders %}
+            <a href="/manifest/order/{{ order.order_number }}?day={{ active_day }}" class="manifest-line link-card">
+                <div class="manifest-main">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                        <div class="manifest-name">{{ order.customer_name }}</div>
+                        {% if order.is_cancelled %}
+                        <span class="manifest-chip" style="background:#4d2c20;color:#fff;">CANCELLED</span>
+                        {% endif %}
+                    </div>
+                    <div class="manifest-meta">{{ order.product_name }} · {{ order.order_number }}</div>
+
+                    <div class="manifest-detail-row">
+                        <span class="detail-tag">Pickup</span>
+                        <span class="detail-text">{{ order.pickup_time or '-' }} · {{ order.pickup_location or '-' }}</span>
+                    </div>
+
+                    {% if order.email %}
+                    <div class="manifest-detail-row">
+                        <span class="detail-tag">Email</span>
+                        <span class="detail-text">{{ order.email }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if order.mobile %}
+                    <div class="manifest-detail-row">
+                        <span class="detail-tag">Mobile</span>
+                        <span class="detail-text">{{ order.mobile }}</span>
+                    </div>
+                    {% endif %}
+
+                    <div class="manifest-detail-row">
+                        <span class="detail-tag">Order</span>
+                        <span class="detail-text">
+                            {% if order.order_weight_total is not none %}{{ order.order_weight_total }} kg total{% else %}No order weight{% endif %}
+                            · {{ order.pax_total }} pax
+                        </span>
+                    </div>
+
+                    <div class="passenger-stack">
+                        {% for passenger in order.passengers %}
+                        <div class="passenger-line" style="display:block;">
+                            <div><strong>{{ passenger.name }}</strong></div>
+                            <div style="margin-top:4px;">
+                                {% if passenger.weight_lines %}
+                                    {{ passenger.weight_lines|join(' · ') }}
+                                {% else %}
+                                    No weight provided
+                                {% endif %}
+                            </div>
+                            {% if passenger.email %}
+                            <div style="margin-top:4px;">Email: {{ passenger.email }}</div>
+                            {% endif %}
+                            {% if passenger.mobile %}
+                            <div style="margin-top:4px;">Mobile: {{ passenger.mobile }}</div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="action-row">
+                        <form method="POST" action="/manifest/order/{{ order.order_number }}/test-pickup">
+                            <input type="hidden" name="day" value="{{ active_day }}">
+                            <button type="submit" class="export-btn">Send pickup info test</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="manifest-badges">
+                    {% for q in order.quantities %}
+                        <span class="manifest-chip">{{ q.label }} × {{ q.value }}</span>
+                    {% endfor %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </article>
+    {% endfor %}
+</section>
+{% else %}
+<div class="flight-group-card"><div class="manifest-name">No flights found for {{ active_day }}.</div></div>
+{% endif %}
+
+<script>
+function updateFlightCountdowns() {
+    const now = new Date();
+    document.querySelectorAll(".countdown-timer").forEach((el) => {
+        const slot = el.dataset.slot;
+        const day = el.dataset.day;
+        const cancelled = el.dataset.cancelled === "1";
+        if (cancelled) {
+            el.textContent = "Cancelled";
+            return;
+        }
+        if (!slot) {
+            el.textContent = "Unknown";
+            return;
+        }
+        const target = new Date(slot);
+        const diff = target - now;
+
+        if (day === "today" && diff <= 0) {
+            el.textContent = "Departed";
+            return;
+        }
+
+        const totalSeconds = Math.max(0, Math.floor(diff / 1000));
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        el.textContent =
+            String(hours).padStart(2, "0") + ":" +
+            String(minutes).padStart(2, "0") + ":" +
+            String(seconds).padStart(2, "0");
+    });
+}
+updateFlightCountdowns();
+setInterval(updateFlightCountdowns, 1000);
+</script>
+
+{% endblock %}

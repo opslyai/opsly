@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% set s = dashboard_data.summary %}
+{% set hero = dashboard_data.hero_today %}
+<div class="ops-page dashboard-page-tight">
+    <section class="ops-hero">
+        <div class="dashboard-hero-fill">
+            <div>
+                <p class="ops-kicker">Operations command center</p>
+                <h1>Opsly dashboard</h1>
+                <p class="ops-subtext">A cleaner command-centre style dashboard with deeper Rezdy analytics across confirmed bookings, cancellations, passengers, revenue, source mix, flight mix, pickup hotspots, and short-window trends.</p>
+            </div>
+            <div class="dashboard-hero-today">
+                <div class="dashboard-hero-today-head">
+                    <div>
+                        <div class="ops-kicker">Today only</div>
+                        <div class="dashboard-hero-title">{{ hero.headline }}</div>
+                        <div class="ops-subtext">{{ hero.subline }}</div>
+                    </div>
+                    {% if s.today_whole_day_cancelled %}<div class="dashboard-alert-pill">Whole day cancelled</div>{% endif %}
+                </div>
+                <div class="dashboard-hero-focus-grid">
+                    {% for item in s.today_focus %}<div class="dashboard-focus-card"><div class="label">{{ item.label }}</div><div class="value">{{ item.value }}</div></div>{% endfor %}
+                </div>
+                <div class="dashboard-olivia-note">
+                    <div class="ops-kicker">{{ hero.olivia_title }}</div>
+                    <div class="dashboard-olivia-text">{{ hero.olivia_text }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="ops-hero-panel">
+            <div>
+                <div class="ops-kicker">Live snapshot</div>
+                <div style="font-size:1.8rem;font-weight:800;">{{ s.today_orders }} confirmed orders today</div>
+                <div class="ops-subtext" style="margin-top:8px;">{{ s.today_passengers }} confirmed passengers today · {{ s.tomorrow_passengers }} confirmed passengers tomorrow · {{ s.today_cancelled_orders }} cancelled today</div>
+                <div class="ops-inline-actions dashboard-actions" style="margin-top:14px;">
+                    <button type="button" class="secondary-btn dashboard-action-btn" id="rezdy-pull-btn">Pull stats</button>
+                    <button type="button" class="secondary-btn dashboard-action-btn" id="rezdy-clear-btn">Clear stats</button>
+                </div>
+                <div class="ops-subtext dashboard-sync-text" style="margin-top:14px;">
+                    {% if s.analytics_source == 'rezdy' and s.rezdy_last_synced %}
+                        Last 30d synced {{ s.rezdy_last_synced[:16].replace('T', ' ') }}
+                    {% else %}
+                        Waiting for stat sync
+                    {% endif %}
+                    {% if s.rezdy_next30_synced %} · Next 30d synced {{ s.rezdy_next30_synced[:16].replace('T', ' ') }}{% endif %}
+                </div>
+            </div>
+            <div class="ops-hero-stats">
+                <div class="mini-metric"><div class="label">30d confirmed</div><div class="value">{{ s.last_30.confirmed_orders }}</div></div>
+                <div class="mini-metric"><div class="label">30d cancelled</div><div class="value">{{ s.last_30.cancelled_orders }}</div></div>
+                <div class="mini-metric"><div class="label">Next 30d confirmed</div><div class="value">{{ s.next_30.confirmed_orders }}</div></div>
+                <div class="mini-metric"><div class="label">Top source</div><div class="value">{{ s.top_source }}</div></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="ops-grid-4">
+        <article class="ops-card"><div class="label">Today confirmed pax</div><div class="value">{{ s.today_passengers }}</div><div class="sub">Max display capped at 35</div></article>
+        <article class="ops-card"><div class="label">Today revenue</div><div class="value">${{ '{:,.0f}'.format(s.today_revenue) }}</div><div class="sub">Confirmed only</div></article>
+        <article class="ops-card"><div class="label">Tomorrow confirmed pax</div><div class="value">{{ s.tomorrow_passengers }}</div><div class="sub">Tomorrow cancelled: {{ s.tomorrow_cancelled_orders }}</div></article>
+        <article class="ops-card"><div class="label">Missing contacts</div><div class="value">{{ s.missing_contacts }}</div><div class="sub">Missing booking email</div></article>
+    </section>
+
+    <section class="ops-row-2 dashboard-stretch-row">
+        <article class="weather-card weather-card-enhanced weather-card-premium">
+            <div class="weather-topline">
+                <div class="ops-kicker">Live weather</div>
+                <div class="weather-brisbane-clock">
+                    <div class="label">Brisbane time</div>
+                    <div class="value">{{ weather.brisbane_time }}</div>
+                    <div class="sub">{{ weather.brisbane_date }}</div>
+                </div>
+            </div>
+            <div class="weather-main weather-main-premium">
+                <div class="weather-hero weather-hero-premium">
+                    <div class="weather-art {{ weather.variant or 'cloudy' }}" data-icon="{{ weather.icon or '☁️' }}"></div>
+                    <div class="weather-summary-line">
+                        <div class="weather-temp">{% if weather.temperature is not none %}{{ weather.temperature|round|int }}°{% else %}--{% endif %}</div>
+                        <div class="weather-summary">{{ weather.location }} · {{ weather.summary }} · {{ weather.updated_label }}</div>
+                        <div class="weather-summary weather-secondary-line">Feels like {% if weather.feels_like is not none %}{{ weather.feels_like|round|int }}°{% else %}--{% endif %} · Rain now {{ weather.rain if weather.rain is not none else '--' }} mm</div>
+                    </div>
+                </div>
+                <div class="weather-meta-grid weather-meta-grid-tall">
+                    <div class="cell"><div class="label">Today</div><div class="value">{% if weather.today.high is not none %}{{ weather.today.high|round|int }}° / {{ weather.today.low|round|int }}°{% else %}--{% endif %}</div><div class="sub">{{ weather.today.summary or 'Forecast pending' }}</div></div>
+                    <div class="cell"><div class="label">Tomorrow</div><div class="value">{% if weather.tomorrow.high is not none %}{{ weather.tomorrow.high|round|int }}° / {{ weather.tomorrow.low|round|int }}°{% else %}--{% endif %}</div><div class="sub">{{ weather.tomorrow.summary or 'Forecast pending' }}</div></div>
+                </div>
+            </div>
+            <div class="weather-grid">
+                <div class="cell"><div class="label">Wind</div><div class="value">{{ weather.wind_speed if weather.wind_speed is not none else '--' }} km/h</div></div>
+                <div class="cell"><div class="label">Humidity</div><div class="value">{{ weather.humidity if weather.humidity is not none else '--' }}%</div></div>
+                <div class="cell"><div class="label">Cloud</div><div class="value">{{ weather.cloud_cover if weather.cloud_cover is not none else '--' }}%</div></div>
+                <div class="cell"><div class="label">Rain chance</div><div class="value">{{ weather.today.rain_chance if weather.today and weather.today.rain_chance is not none else '--' }}%</div></div>
+            </div>
+            <div class="weather-hourly-strip">{% for row in weather.hourly %}<div class="weather-hour-pill"><div class="label">{{ row.time }}</div><div class="value">{% if row.temperature is not none %}{{ row.temperature|round|int }}°{% else %}--{% endif %}</div><div class="sub">{{ row.rain_chance if row.rain_chance is not none else '--' }}% rain</div></div>{% endfor %}</div>
+        </article>
+
+        <article class="ops-card ai-insights-fill">
+            <div class="ops-kicker">AI insights</div>
+            <div class="ops-list ops-list-fill">{% for item in dashboard_data.insights %}<div class="ops-list-item"><strong>{{ item.title }}</strong><span>{{ item.detail }}</span></div>{% endfor %}</div>
+        </article>
+    </section>
+
+    <section class="ops-row-2">
+        <article class="chart-card ops-hero-panel"><div class="ops-kicker">Last 30d source split</div><table class="breakdown-table"><thead><tr><th>Source</th><th>Bookings</th><th>Pax</th><th>Revenue</th><th>Share</th></tr></thead><tbody>{% for row in s.source_breakdown[:8] %}<tr><td>{{ row.source }}</td><td>{{ row.bookings }}</td><td>{{ row.passengers }}</td><td>${{ '{:,.0f}'.format(row.revenue) }}</td><td>{{ row.share_pct or 0 }}%</td></tr>{% endfor %}</tbody></table></article>
+        <article class="chart-card ops-hero-panel"><div class="ops-kicker">Next 30d source split</div><table class="breakdown-table"><thead><tr><th>Source</th><th>Bookings</th><th>Pax</th><th>Revenue</th><th>Share</th></tr></thead><tbody>{% for row in s.future_source_breakdown[:8] %}<tr><td>{{ row.source }}</td><td>{{ row.bookings }}</td><td>{{ row.passengers }}</td><td>${{ '{:,.0f}'.format(row.revenue) }}</td><td>{{ row.share_pct or 0 }}%</td></tr>{% endfor %}</tbody></table></article>
+    </section>
+
+    <section class="ops-row-2">
+        <article class="chart-card ops-hero-panel"><div class="ops-kicker">Last 30d flight slots</div><table class="breakdown-table"><thead><tr><th>Flight</th><th>Bookings</th><th>Pax</th><th>Revenue</th></tr></thead><tbody>{% for row in s.flight_breakdown[:8] %}<tr><td>{{ row.slot }}</td><td>{{ row.bookings }}</td><td>{{ row.passengers }}</td><td>${{ '{:,.0f}'.format(row.revenue) }}</td></tr>{% endfor %}</tbody></table></article>
+        <article class="chart-card ops-hero-panel"><div class="ops-kicker">Next 30d flight slots</div><table class="breakdown-table"><thead><tr><th>Flight</th><th>Bookings</th><th>Pax</th><th>Revenue</th></tr></thead><tbody>{% for row in s.future_flight_breakdown[:8] %}<tr><td>{{ row.slot }}</td><td>{{ row.bookings }}</td><td>{{ row.passengers }}</td><td>${{ '{:,.0f}'.format(row.revenue) }}</td></tr>{% endfor %}</tbody></table></article>
+    </section>
+
+    <section class="ops-row-2">
+        <article class="chart-card ops-hero-panel"><div class="ops-kicker">Last 30d pickup hotspots</div><table class="breakdown-table"><thead><tr><th>Pickup</th><th>Bookings</th><th>Pax</th></tr></thead><tbody>{% for row in s.pickup_breakdown[:8] %}<tr><td>{{ row.pickup }}</td><td>{{ row.bookings }}</td><td>{{ row.passengers }}</td></tr>{% endfor %}</tbody></table></article>
+        <article class="chart-card ops-hero-panel"><div class="ops-kicker">Next 30d pickup hotspots</div><table class="breakdown-table"><thead><tr><th>Pickup</th><th>Bookings</th><th>Pax</th></tr></thead><tbody>{% for row in s.future_pickup_breakdown[:8] %}<tr><td>{{ row.pickup }}</td><td>{{ row.bookings }}</td><td>{{ row.passengers }}</td></tr>{% endfor %}</tbody></table></article>
+    </section>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+(function(){
+  async function bindAction(id,url,pending){const btn=document.getElementById(id);if(!btn)return;btn.addEventListener('click',async()=>{const original=btn.textContent;btn.disabled=true;btn.textContent=pending;try{const resp=await fetch(url,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}});const data=await resp.json();if(!resp.ok||!data.ok) throw new Error(data.error||'Request failed');window.location.reload();}catch(err){alert(err.message||'Request failed');btn.disabled=false;btn.textContent=original;}})}
+  bindAction('rezdy-pull-btn','/dashboard/pull-rezdy-stats','Pulling…');
+  bindAction('rezdy-clear-btn','/dashboard/clear-rezdy-stats','Clearing…');
+})();
+</script>
+{% endblock %}

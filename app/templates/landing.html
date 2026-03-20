@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Opsly | The operational layer for tour companies{% endblock %}
+{% block content %}
+<div class="landing-page">
+  <section class="landing-hero landing-hero-compact">
+    <div class="landing-hero-copy">
+      <p class="marketing-kicker">Opsly for tour operators</p>
+      <h1 class="landing-title compact">One place to run the day.</h1>
+      <p class="landing-sub hero-lead">Opsly plugs into the booking systems, inboxes, and workflows you already use. Your team keeps its current setup. Opsly adds the operational layer on top.</p>
+      <div class="hero-actions landing-hero-actions">
+        <a href="/contact" class="primary-btn hero-btn">Request a demo</a>
+        <a href="/pricing" class="secondary-btn hero-btn">View pricing</a>
+        <a href="/login" class="secondary-btn hero-btn ghost-login-btn">Client log in</a>
+      </div>
+      <div class="landing-proof-row">
+        <span class="landing-proof-pill">No rip-and-replace</span>
+        <span class="landing-proof-pill">Works with current email and booking tools</span>
+        <span class="landing-proof-pill">Built for daily tour operations</span>
+      </div>
+    </div>
+
+    <div class="landing-hero-stack">
+      <article class="landing-showcase-card landing-showcase-primary">
+        <div class="landing-showcase-top">
+          <div>
+            <p class="marketing-kicker">What Opsly covers</p>
+            <h3>Control the day without changing your stack.</h3>
+          </div>
+          <span class="landing-status">Live ops</span>
+        </div>
+        <div class="landing-metric-grid">
+          <div class="landing-metric-card"><span>Flight Deck</span><strong>Manifests, pickups, timing</strong></div>
+          <div class="landing-metric-card"><span>Customer comms</span><strong>Cancellations, updates, replies</strong></div>
+          <div class="landing-metric-card"><span>Orders</span><strong>Booking detail in one view</strong></div>
+          <div class="landing-metric-card"><span>Integrations</span><strong>Fits around current systems</strong></div>
+        </div>
+      </article>
+
+      <article class="landing-showcase-card">
+        <div class="landing-showcase-top">
+          <div>
+            <p class="marketing-kicker">Why companies buy</p>
+            <h3>Less manual work. Faster customer handling.</h3>
+          </div>
+        </div>
+        <div class="landing-value-list">
+          <div class="landing-value-item"><strong>No setup overhaul</strong><span>Opsly connects into what already works.</span></div>
+          <div class="landing-value-item"><strong>One operational view</strong><span>Staff stop jumping between tabs and inboxes.</span></div>
+          <div class="landing-value-item"><strong>Cleaner customer handling</strong><span>Reply faster and manage disruptions with more confidence.</span></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="landing-section">
+    <div class="landing-section-head narrow">
+      <p class="marketing-kicker">A better pitch</p>
+      <h2>Sell the layer, not a system replacement.</h2>
+      <p class="landing-section-sub">That is the strongest commercial point. Opsly does not ask operators to throw out their current booking platform or email flow. It sits on top and makes the operation easier to run.</p>
+    </div>
+    <div class="landing-feature-grid compact-grid">
+      <article class="landing-feature-card">
+        <h3>Keeps your current setup</h3>
+        <p>Booking system stays. Email stays. Team workflow stays. Opsly becomes the operational layer that ties it together.</p>
+      </article>
+      <article class="landing-feature-card">
+        <h3>Built for day-of-ops</h3>
+        <p>Use one place for manifests, pickups, cancellations, booking detail, and internal coordination.</p>
+      </article>
+      <article class="landing-feature-card">
+        <h3>Works as the team grows</h3>
+        <p>Start with the core platform, then upgrade to Olivia when you want AI handling and insight.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="landing-section landing-olivia-highlight" id="olivia">
+    <div class="landing-strip-copy">
+      <p class="marketing-kicker">Olivia AI</p>
+      <h2>Olivia can handle customer comms and operational questions.</h2>
+      <p>Growth includes Olivia, your AI operator for customer conversations and fast answers. She helps teams respond faster, surface issues sooner, and stay ahead of the day.</p>
+      <div class="hero-actions landing-hero-actions">
+        <a href="/olivia-ai" class="primary-btn hero-btn">See Olivia</a>
+        <a href="/pricing" class="secondary-btn hero-btn">See Growth plan</a>
+      </div>
+    </div>
+    <div class="landing-hero-stack">
+      <div class="landing-chat-bubble user">Can you handle the customer update for this cancelled booking?</div>
+      <div class="landing-chat-bubble bot">Yes. I can draft or send the message, explain next steps, and keep the tone consistent with your operation.</div>
+      <div class="landing-chat-bubble user">What needs attention today?</div>
+      <div class="landing-chat-bubble bot">Open departures, missing booking detail, customer comms, and operational issues can be surfaced quickly in one place.</div>
+    </div>
+  </section>
+
+  <section class="landing-section landing-plan-section" id="pricing">
+    <div class="landing-section-head narrow">
+      <p class="marketing-kicker">Early access pricing</p>
+      <h2>Half price for the first 1,000 customers.</h2>
+      <p class="landing-section-sub">A straightforward launch offer designed to make the decision easy. Launch gives operators the core Opsly layer. Growth adds Olivia.</p>
+    </div>
+    <div class="landing-plan-grid">
+      <article class="landing-plan-card">
+        <div class="landing-plan-top">
+          <div>
+            <p class="marketing-kicker">Launch</p>
+            <h3>Core Opsly platform</h3>
+          </div>
+          <span class="landing-plan-badge">50% off</span>
+        </div>
+        <div class="landing-plan-price-row">
+          <div class="landing-plan-price">$49<span>/week</span></div>
+          <div class="landing-plan-price-note">Regular price: $98/week</div>
+        </div>
+        <p class="landing-plan-sub">For operators that want the command layer without Olivia AI.</p>
+        <ul class="landing-plan-list">
+          <li>Flight Deck and daily visibility</li>
+          <li>Customer handling workflows</li>
+          <li>Orders and booking context</li>
+          <li>Works with your current setup</li>
+        </ul>
+        <a href="/contact" class="secondary-btn hero-btn">Enquire about Launch</a>
+      </article>
+
+      <article class="landing-plan-card featured">
+        <div class="landing-plan-top">
+          <div>
+            <p class="marketing-kicker">Growth</p>
+            <h3>Opsly + Olivia AI</h3>
+          </div>
+          <span class="landing-plan-badge">Best value</span>
+        </div>
+        <div class="landing-plan-price-row">
+          <div class="landing-plan-price">$80<span>/week</span></div>
+          <div class="landing-plan-price-note">Regular price: $160/week</div>
+        </div>
+        <p class="landing-plan-sub">For operators that want the full platform plus Olivia handling customer comms and AI-assisted operational support.</p>
+        <ul class="landing-plan-list">
+          <li>Everything in Launch</li>
+          <li>Olivia AI included</li>
+          <li>Customer comms support</li>
+          <li>Operational questions and summaries</li>
+        </ul>
+        <a href="/contact" class="primary-btn hero-btn">Request Growth demo</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="landing-faq">
+    <div class="landing-section-head narrow">
+      <p class="marketing-kicker">Questions</p>
+      <h2>Simple answers before you start.</h2>
+    </div>
+    <div class="landing-faq-grid">
+      <article class="landing-faq-card">
+        <h3>Do we need to replace our current tools?</h3>
+        <p>No. Opsly is designed to connect into the tools and workflows your team already uses.</p>
+      </article>
+      <article class="landing-faq-card">
+        <h3>Is Olivia in every plan?</h3>
+        <p>No. Olivia is included in Growth only. Launch is the core operational layer without Olivia AI.</p>
+      </article>
+      <article class="landing-faq-card">
+        <h3>Why is the offer strong right now?</h3>
+        <p>The first 1,000 customers get Launch at $49 per week and Growth at $80 per week, both at 50% off the regular price.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="landing-final-cta">
+    <p class="marketing-kicker">Ready to sell the right story?</p>
+    <h2>Keep the current setup. Add the layer that makes operations easier.</h2>
+    <div class="hero-actions landing-hero-actions center">
+      <a href="/contact" class="primary-btn hero-btn">Request a demo</a>
+      <a href="/login" class="secondary-btn hero-btn">Client log in</a>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,435 @@
+from io import BytesIO
+import ast
+import json
+import re
+from pathlib import Path
+from flask import Blueprint, render_template, request, send_file, abort, flash, redirect, url_for, jsonify, current_app
+from flask_login import login_required
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+
+from app.services.rezdy import get_bookings_for_day, get_order_detail
+from app.services.missive import send_email
+
+manifest = Blueprint("manifest", __name__, url_prefix="/manifest")
+
+TICKET_PRICE = 299
+MANUAL_CANCELLED_FLIGHTS_TODAY = 5
+MANUAL_CANCELLED_PAX_TODAY = 35
+MANUAL_CANCELLED_FLIGHTS_TOMORROW = 5
+MANUAL_CANCELLED_PAX_TOMORROW = 35
+GYG_FEE_RATE = 0.25
+
+def _snapshot_dir():
+    path = Path(current_app.instance_path) / "day_snapshots"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+def _date_key(day_offset):
+    from datetime import datetime, timedelta
+    return (datetime.now().date() + timedelta(days=day_offset)).strftime("%Y-%m-%d")
+
+def _snapshot_path(day_offset):
+    label = "tomorrow" if day_offset == 1 else "today"
+    return _snapshot_dir() / f"{label}_{_date_key(day_offset)}.json"
+
+def _save_snapshot(day_offset, manifests):
+    path = _snapshot_path(day_offset)
+    payload = {"date": _date_key(day_offset), "day_offset": day_offset, "manifests": manifests}
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+def _load_snapshot(day_offset):
+    path = _snapshot_path(day_offset)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload.get("manifests") or []
+    except Exception:
+        return None
+
+def _pickup_obj(value):
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        txt = value.strip()
+        for parser in (json.loads, ast.literal_eval):
+            try:
+                parsed = parser(txt)
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                pass
+    return {}
+
+def _extract_emails(text):
+    if not text:
+        return []
+    return list(dict.fromkeys(re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', str(text))))
+
+def _extract_phones(text):
+    if not text:
+        return []
+    return list(dict.fromkeys(re.findall(r'(?:\+?\d[\d\s\-\(\)]{7,}\d)', str(text))))
+
+def _clean_pickup_location(value):
+    pickup = _pickup_obj(value)
+    if pickup:
+        return pickup.get("location_short") or pickup.get("location_full") or pickup.get("pickup_address") or ""
+    if isinstance(value, str):
+        return value
+    return ""
+
+def _normalise_passenger(passenger, fallback_email="", fallback_mobile="", pickup_location="", pickup_time=""):
+    passenger = passenger or {}
+    email = passenger.get("email") or passenger.get("customer_email") or passenger.get("contact_email") or fallback_email
+    mobile = passenger.get("mobile") or passenger.get("phone") or passenger.get("customer_mobile") or fallback_mobile
+    weight_lines = passenger.get("weight_lines") or ([f"{passenger.get('weight')} kg"] if passenger.get("weight") not in (None, "", 0) else [])
+    return {
+        "name": passenger.get("name") or passenger.get("full_name") or "Passenger",
+        "weight": passenger.get("weight"),
+        "weight_lines": weight_lines,
+        "email": email,
+        "mobile": mobile,
+        "pickup_location": pickup_location,
+        "pickup_time": pickup_time,
+    }
+
+def _normalise_order(order):
+    order = dict(order or {})
+    pickup = _pickup_obj(order.get("pickup"))
+    pickup_location = pickup.get("location_short") or order.get("pickup_location") or _clean_pickup_location(order.get("pickup")) or ""
+    pickup_time = pickup.get("pickup_time") or order.get("pickup_time") or ""
+    pickup_date = pickup.get("pickup_date") or order.get("pickup_date") or ""
+    pickup_address = pickup.get("pickup_address") or order.get("pickup_address") or ""
+
+    emails = []
+    mobiles = []
+
+    for key in ("email", "customer_email", "contact_email"):
+        if order.get(key):
+            emails.extend(_extract_emails(order.get(key)))
+    for key in ("mobile", "phone", "customer_mobile", "contact_phone"):
+        if order.get(key):
+            mobiles.extend(_extract_phones(order.get(key)))
+
+    passengers = []
+    raw_passengers = order.get("passengers") or []
+    for p in raw_passengers:
+        px = _normalise_passenger(p, pickup_location=pickup_location, pickup_time=pickup_time)
+        passengers.append(px)
+        if px.get("email"):
+            emails.append(px["email"])
+        if px.get("mobile"):
+            mobiles.append(px["mobile"])
+
+    emails = list(dict.fromkeys([e for e in emails if e]))
+    mobiles = list(dict.fromkeys([m for m in mobiles if m]))
+
+    if raw_passengers:
+        passengers = [_normalise_passenger(p, fallback_email=(emails[0] if emails else ""), fallback_mobile=(mobiles[0] if mobiles else ""), pickup_location=pickup_location, pickup_time=pickup_time) for p in raw_passengers]
+
+    order["pickup"] = pickup
+    order["pickup_location"] = pickup_location
+    order["pickup_time"] = pickup_time
+    order["pickup_date"] = pickup_date
+    order["pickup_address"] = pickup_address
+    order["email"] = emails[0] if emails else ""
+    order["mobile"] = mobiles[0] if mobiles else ""
+    order["passengers"] = passengers
+    return order
+
+def _normalise_manifests(manifests):
+    cleaned = []
+    for manifest_item in manifests or []:
+        m = dict(manifest_item or {})
+        cleaned_pickups = []
+        for pickup in m.get("pickup_summary", []) or []:
+            cleaned_pickups.append({
+                "date": pickup.get("date") or "",
+                "time": pickup.get("time") or "",
+                "location": _clean_pickup_location(pickup.get("location")) or pickup.get("location") or "",
+            })
+        m["pickup_summary"] = cleaned_pickups
+        m["orders"] = [_normalise_order(order) for order in (m.get("orders") or [])]
+        cleaned.append(m)
+    return cleaned
+
+def _load_or_build_snapshot(day_offset, force_refresh=False):
+    cached = None if force_refresh else _load_snapshot(day_offset)
+    if cached is not None:
+        return _normalise_manifests(cached)
+    manifests = _normalise_manifests(get_bookings_for_day(day_offset=day_offset))
+    _save_snapshot(day_offset, manifests)
+    return manifests
+
+def _find_order_in_snapshots(order_number):
+    for day_offset in (0, 1):
+        manifests = _load_snapshot(day_offset) or []
+        for manifest_item in manifests:
+            for order in manifest_item.get("orders", []) or []:
+                if (order.get("order_number") or "").strip() == order_number:
+                    return _normalise_order(order)
+    return None
+
+def _summary(manifests):
+    flights = len(manifests or [])
+    passengers = sum(int(order.get("pax_total") or 0) for manifest_item in manifests for order in (manifest_item.get("orders") or []))
+    orders = sum(len(manifest_item.get("orders") or []) for manifest_item in manifests)
+    revenue = passengers * TICKET_PRICE
+    return {
+        "flights": flights,
+        "orders": orders,
+        "passengers": passengers,
+        "revenue": revenue,
+    }
+
+@manifest.route("/")
+@login_required
+def home():
+    error = None
+    manifests = []
+    day = request.args.get("day", "today").strip().lower()
+    active_day = "tomorrow" if day == "tomorrow" else "today"
+    day_offset = 1 if active_day == "tomorrow" else 0
+
+    try:
+        manifests = _load_or_build_snapshot(day_offset)
+    except Exception as e:
+        error = str(e)
+
+    whole_day_cancelled = active_day == "today"
+
+    if whole_day_cancelled:
+        for manifest_item in manifests or []:
+            manifest_item["is_cancelled"] = True
+            for order in manifest_item.get("orders", []) or []:
+                order["is_cancelled"] = True
+
+    return render_template("manifest.html", manifests=manifests, error=error, active_day=active_day, whole_day_cancelled=whole_day_cancelled)
+
+@manifest.route("/refresh")
+@login_required
+def refresh_snapshot():
+    day = request.args.get("day", "today").strip().lower()
+    day_offset = 1 if day == "tomorrow" else 0
+    manifests = _load_or_build_snapshot(day_offset, force_refresh=True)
+    return jsonify({"status": "ok", "day": day, "flights": len(manifests)})
+
+@manifest.route("/ops-summary")
+@login_required
+def ops_summary():
+    today_manifests = _load_or_build_snapshot(0)
+    tomorrow_manifests = _load_or_build_snapshot(1)
+
+    today_live = _summary(today_manifests)
+    tomorrow_live = _summary(tomorrow_manifests)
+
+    today_cancelled_flights = MANUAL_CANCELLED_FLIGHTS_TODAY
+    today_cancelled_passengers = MANUAL_CANCELLED_PAX_TODAY
+    tomorrow_cancelled_flights = MANUAL_CANCELLED_FLIGHTS_TOMORROW
+    tomorrow_cancelled_passengers = MANUAL_CANCELLED_PAX_TOMORROW
+
+    today_revenue_lost = today_cancelled_passengers * TICKET_PRICE
+    tomorrow_revenue_lost = tomorrow_cancelled_passengers * TICKET_PRICE
+    today_gyg_fees = round(today_revenue_lost * GYG_FEE_RATE)
+    tomorrow_gyg_fees = round(tomorrow_revenue_lost * GYG_FEE_RATE)
+    today_outcome = today_revenue_lost + today_gyg_fees
+    tomorrow_outcome = tomorrow_revenue_lost + tomorrow_gyg_fees
+
+    total_income = today_live["revenue"] + tomorrow_live["revenue"]
+    total_outcome = today_outcome + tomorrow_outcome
+    total_cancelled_flights = today_cancelled_flights + tomorrow_cancelled_flights
+    total_cancelled_passengers = today_cancelled_passengers + tomorrow_cancelled_passengers
+    total_revenue_lost = today_revenue_lost + tomorrow_revenue_lost
+    total_gyg_fees = today_gyg_fees + tomorrow_gyg_fees
+    total_net = total_income - total_outcome
+
+    return jsonify({
+        "ticket_price": TICKET_PRICE,
+        "gyg_fee_rate": GYG_FEE_RATE,
+        "today": {
+            "booked_flights": today_live["flights"],
+            "booked_orders": today_live["orders"],
+            "booked_passengers": today_live["passengers"],
+            "booked_income": today_live["revenue"],
+            "cancelled_flights": today_cancelled_flights,
+            "cancelled_passengers": today_cancelled_passengers,
+            "revenue_lost": today_revenue_lost,
+            "gyg_fees": today_gyg_fees,
+            "outcome": today_outcome,
+        },
+        "tomorrow": {
+            "booked_flights": tomorrow_live["flights"],
+            "booked_orders": tomorrow_live["orders"],
+            "booked_passengers": tomorrow_live["passengers"],
+            "booked_income": tomorrow_live["revenue"],
+            "cancelled_flights": tomorrow_cancelled_flights,
+            "cancelled_passengers": tomorrow_cancelled_passengers,
+            "revenue_lost": tomorrow_revenue_lost,
+            "gyg_fees": tomorrow_gyg_fees,
+            "outcome": tomorrow_outcome,
+        },
+        "total": {
+            "booked_flights": today_live["flights"] + tomorrow_live["flights"],
+            "booked_orders": today_live["orders"] + tomorrow_live["orders"],
+            "booked_passengers": today_live["passengers"] + tomorrow_live["passengers"],
+            "income": total_income,
+            "cancelled_flights": total_cancelled_flights,
+            "cancelled_passengers": total_cancelled_passengers,
+            "revenue_lost": total_revenue_lost,
+            "gyg_fees": total_gyg_fees,
+            "outcome": total_outcome,
+            "net": total_net,
+        }
+    })
+
+@manifest.route("/order/<order_number>")
+@login_required
+def order_detail(order_number):
+    day = request.args.get("day", "today").strip().lower()
+    day_offset = 1 if day == "tomorrow" else 0
+    order = None
+    try:
+        order = get_order_detail(order_number, day_offset=day_offset)
+    except Exception:
+        order = None
+    if not order:
+        order = _find_order_in_snapshots(order_number)
+    if not order:
+        abort(404)
+    order = _normalise_order(order)
+    return render_template("order_detail.html", order=order, active_day=day)
+
+@manifest.route("/order/<order_number>/json")
+@login_required
+def order_json(order_number):
+    day = request.args.get("day", "today").strip().lower()
+    day_offset = 1 if day == "tomorrow" else 0
+    order = None
+    try:
+        order = get_order_detail(order_number, day_offset=day_offset)
+    except Exception:
+        order = None
+    if not order:
+        order = _find_order_in_snapshots(order_number)
+    if not order:
+        abort(404)
+    order = _normalise_order(order)
+    return render_template("order_json.html", order=order, active_day=day)
+
+@manifest.route("/order/<order_number>/test-pickup", methods=["POST"])
+@login_required
+def test_pickup_email(order_number):
+    day = request.form.get("day", "today").strip().lower()
+    day_offset = 1 if day == "tomorrow" else 0
+    order = None
+    try:
+        order = get_order_detail(order_number, day_offset=day_offset)
+    except Exception:
+        order = None
+    if not order:
+        order = _find_order_in_snapshots(order_number)
+    if not order:
+        abort(404)
+
+    order = _normalise_order(order)
+
+    subject = f"TEST Pickup Info - {order_number}"
+    body = f"""
+    <p>Test pickup info email</p>
+    <p><strong>Customer:</strong> {order.get('customer_name') or 'Customer'}</p>
+    <p><strong>Pickup location:</strong> {order.get('pickup_location') or '-'}</p>
+    <p><strong>Pickup date:</strong> {order.get('pickup_date') or '-'}</p>
+    <p><strong>Pickup time:</strong> {order.get('pickup_time') or '-'}</p>
+    <p><strong>Flight:</strong> {order.get('flight_slot_full') or order.get('flight_slot') or '-'}</p>
+    """
+    send_email("edsaleh98@gmail.com", subject, body)
+    flash(f"Test pickup email sent for {order_number}")
+    return redirect(url_for("manifest.order_detail", order_number=order_number, day=day))
+
+@manifest.route("/order/<order_number>/test-cancel", methods=["POST"])
+@login_required
+def test_cancel_email(order_number):
+    day = request.form.get("day", "today").strip().lower()
+    subject = f"TEST Cancellation Email - {order_number}"
+    body = f"<p>Test cancellation email for order <strong>{order_number}</strong>.</p>"
+    send_email("edsaleh98@gmail.com", subject, body)
+    flash(f"Test cancellation email sent for {order_number}")
+    return redirect(url_for("manifest.order_detail", order_number=order_number, day=day))
+
+@manifest.route("/order/<order_number>/test-email", methods=["POST"])
+@login_required
+def test_generic_email(order_number):
+    day = request.form.get("day", "today").strip().lower()
+    subject = f"TEST Generic Email - {order_number}"
+    body = f"<p>Test generic email for order <strong>{order_number}</strong>.</p>"
+    send_email("edsaleh98@gmail.com", subject, body)
+    flash(f"Test generic email sent for {order_number}")
+    return redirect(url_for("manifest.order_detail", order_number=order_number, day=day))
+
+@manifest.route("/export")
+@login_required
+def export_pdf():
+    day = request.args.get("day", "today").strip().lower()
+    slot_iso = request.args.get("slot", "").strip()
+    day_offset = 1 if day == "tomorrow" else 0
+
+    manifests = _load_or_build_snapshot(day_offset)
+    selected = None
+    for m in manifests:
+        if m.get("slot_iso") == slot_iso:
+            selected = m
+            break
+
+    if not selected:
+        abort(404)
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 50
+
+    pdf.setFont("Helvetica-Bold", 18)
+    pdf.drawString(40, y, "Opsly Manifest")
+    y -= 24
+
+    pdf.setFont("Helvetica", 11)
+    pdf.drawString(40, y, f"Flight: {selected['slot_display_full']}")
+    y -= 16
+    pdf.drawString(40, y, f"Day: {day.title()}")
+    y -= 16
+    pdf.drawString(40, y, f"Total Pax: {selected['total_pax']}")
+    y -= 16
+    pdf.drawString(40, y, f"Total Weight: {selected['total_weight']} kg" if selected['total_weight'] is not None else "Total Weight: Not available")
+    y -= 24
+
+    for pickup in selected.get("pickup_summary", []):
+        if y < 80:
+            pdf.showPage()
+            y = height - 50
+        pdf.drawString(55, y, f"{pickup['date']} · {pickup['time']} · {pickup['location']}")
+        y -= 14
+
+    y -= 10
+
+    for idx, order in enumerate(selected["orders"], start=1):
+        if y < 120:
+            pdf.showPage()
+            y = height - 50
+
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(40, y, f"{idx}. {order['customer_name']} ({order['order_number']})")
+        y -= 16
+
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(55, y, f"Pickup: {order.get('pickup_date') or '-'} · {order.get('pickup_time') or '-'} · {order.get('pickup_location') or '-'}")
+        y -= 14
+        pdf.drawString(55, y, f"Pax: {order['pax_total']}")
+        y -= 18
+
+    pdf.save()
+    buffer.seek(0)
+
+    filename = f"opsly_manifest_{selected['slot'].replace(':','')}_{day}.pdf"
+    return send_file(buffer, as_attachment=True, download_name=filename, mimetype="application/pdf")

@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block content %}
+
+
+<div class="monitor-wrap">
+  <h1 class="monitor-title">Monitoring</h1>
+  <p class="monitor-sub">Debug view for Rezdy customer and booking data</p>
+
+  {% if error %}
+    <div class="error-box"><strong>Error:</strong> {{ error }}</div>
+  {% endif %}
+
+  <form method="GET">
+    <div class="monitor-form">
+      <div class="monitor-field">
+        <label for="query_type">Query Type</label>
+        <select id="query_type" name="query_type">
+          <option value="customer" {% if query_type == "customer" %}selected{% endif %}>Look for customer</option>
+          <option value="flight" {% if query_type == "flight" %}selected{% endif %}>Look for flight</option>
+        </select>
+      </div>
+
+      <div class="monitor-field">
+        <label for="day">Day</label>
+        <select id="day" name="day">
+          <option value="today" {% if day == "today" %}selected{% endif %}>Today</option>
+          <option value="tomorrow" {% if day == "tomorrow" %}selected{% endif %}>Tomorrow</option>
+        </select>
+      </div>
+
+      <div class="monitor-field">
+        <label for="flight_time">Flight Time</label>
+        <select id="flight_time" name="flight_time">
+          <option value="" {% if not flight_time %}selected{% endif %}>All flights</option>
+          {% for t in flight_times %}
+            <option value="{{ t }}" {% if flight_time == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="monitor-field">
+        <label for="customer_name">Customer Name</label>
+        <input id="customer_name" type="text" name="customer_name" value="{{ customer_name or '' }}" placeholder="Search customer name">
+      </div>
+    </div>
+
+    <div class="monitor-actions">
+      <button type="submit" class="monitor-btn">Run Query</button>
+      <a href="/monitoring/" class="monitor-btn-secondary">Clear</a>
+    </div>
+  </form>
+
+  <div class="monitor-grid">
+    <div class="monitor-card">
+      <div class="monitor-label">Results</div>
+      <div class="monitor-value">{{ results|length }}</div>
+    </div>
+    <div class="monitor-card">
+      <div class="monitor-label">Day</div>
+      <div class="monitor-value">{{ day|capitalize }}</div>
+    </div>
+    <div class="monitor-card">
+      <div class="monitor-label">Flight Filter</div>
+      <div class="monitor-value">{{ flight_time or "All flights" }}</div>
+    </div>
+    <div class="monitor-card">
+      <div class="monitor-label">Customer Filter</div>
+      <div class="monitor-value">{{ customer_name or "None" }}</div>
+    </div>
+
+    {% if selected %}
+    <div class="monitor-card">
+      <div class="monitor-label">Customer</div>
+      <div class="monitor-value">{{ selected.customer_name or "—" }}</div>
+    </div>
+    <div class="monitor-card">
+      <div class="monitor-label">Order Number</div>
+      <div class="monitor-value">{{ selected.order_number or "—" }}</div>
+    </div>
+    <div class="monitor-card">
+      <div class="monitor-label">Status</div>
+      <div class="monitor-value">{{ selected.status or "—" }}</div>
+    </div>
+    <div class="monitor-card">
+      <div class="monitor-label">Flight</div>
+      <div class="monitor-value">{{ selected.flight_time or "—" }}</div>
+    </div>
+    <div class="monitor-card">
+      <div class="monitor-label">Email</div>
+      <div class="monitor-value small">{{ selected.email or "—" }}</div>
+    </div>
+    <div class="monitor-card">
+      <div class="monitor-label">Mobile</div>
+      <div class="monitor-value small">{{ selected.mobile or "—" }}</div>
+    </div>
+    <div class="monitor-card">
+      <div class="monitor-label">Pickup Location</div>
+      <div class="monitor-value small">{{ selected.pickup_location or "—" }}</div>
+    </div>
+    <div class="monitor-card">
+      <div class="monitor-label">Pickup Time</div>
+      <div class="monitor-value small">{{ selected.pickup_date or "" }} {{ selected.pickup_time or "" }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="monitor-section">
+    <h2 class="monitor-section-title">Matching Customers</h2>
+    {% if results %}
+      <div class="monitor-results">
+        {% for order in results %}
+          <div class="result-card">
+            <div class="result-head">
+              <div>
+                <div class="result-name">{{ order.customer_name or "Unknown customer" }}</div>
+                <div class="result-sub">{{ order.order_number or "No order number" }}{% if order.flight_time %} • {{ order.flight_time }}{% endif %}</div>
+              </div>
+              <div class="result-chip">{{ order.status or "Unknown" }}</div>
+            </div>
+
+            <div class="result-grid">
+              <div class="result-item"><div class="k">Email</div><div class="v">{{ order.email or "—" }}</div></div>
+              <div class="result-item"><div class="k">Mobile</div><div class="v">{{ order.mobile or "—" }}</div></div>
+              <div class="result-item"><div class="k">Pickup</div><div class="v">{{ order.pickup_location or "—" }}</div></div>
+              <div class="result-item"><div class="k">Pickup Time</div><div class="v">{{ order.pickup_date or "" }} {{ order.pickup_time or "" }}</div></div>
+            </div>
+
+            <details>
+              <summary><strong>Passengers</strong></summary>
+              <div class="passenger-list">
+                {% if order.passengers %}
+                  {% for p in order.passengers %}
+                    <div class="passenger-item">
+                      <div class="passenger-name">{{ p.name or "Passenger" }}</div>
+                      <div>Email: {{ p.email or "—" }}</div>
+                      <div>Mobile: {{ p.mobile or "—" }}</div>
+                      <div>Weight: {{ p.weight or "—" }}</div>
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="passenger-item">No passenger data found.</div>
+                {% endif %}
+              </div>
+            </details>
+
+            <details style="margin-top:12px;">
+              <summary><strong>Customer JSON</strong></summary>
+              <div class="monitor-pre-wrap" style="margin-top:12px;">
+                <pre class="monitor-pre">{{ order.raw | tojson(indent=2) }}</pre>
+              </div>
+            </details>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">No matching results found.</div>
+    {% endif %}
+  </div>
+
+  <div class="monitor-section">
+    <h2 class="monitor-section-title">Full Rezdy Raw JSON</h2>
+    <div class="monitor-pre-wrap">
+      <pre class="monitor-pre">{{ raw_json }}</pre>
+    </div>
+  </div>
+</div>
+{% endblock %}

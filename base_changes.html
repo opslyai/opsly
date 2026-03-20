@@ -1,0 +1,32 @@
+<!-- Add inside navbar -->
+<button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">
+  <span id="theme-toggle-label">Light mode</span>
+</button>
+
+<!-- Add before </body> -->
+<script>
+(function () {
+  const savedTheme = localStorage.getItem("opsly-theme") || "dark";
+  document.documentElement.setAttribute("data-theme", savedTheme);
+
+  function updateThemeButton() {
+    const label = document.getElementById("theme-toggle-label");
+    if (!label) return;
+    const current = document.documentElement.getAttribute("data-theme") || "dark";
+    label.textContent = current === "dark" ? "Light mode" : "Dark mode";
+  }
+
+  document.addEventListener("click", function (e) {
+    const btn = e.target.closest("#theme-toggle");
+    if (!btn) return;
+
+    const current = document.documentElement.getAttribute("data-theme") || "dark";
+    const next = current === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("opsly-theme", next);
+    updateThemeButton();
+  });
+
+  updateThemeButton();
+})();
+</script>

@@ -1,0 +1,14 @@
+:root {
+  --bg: #120d08;
+  --text: #f3e6d8;
+}
+
+html[data-theme="light"] {
+  --bg: #efe1cf;
+  --text: #23170f;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}

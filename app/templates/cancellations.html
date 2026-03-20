@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% block content %}
+{% set display_whole_day_cancelled = whole_day_cancelled|default(active_day == 'today') %}
+<div class="flightdeck-wrap">
+<section class="manifest-header-v2">
+    <div>
+        <p class="manifest-kicker">Cancellation centre</p>
+        <h1 class="manifest-title">{% if display_whole_day_cancelled %}Whole Day Cancelled{% else %}Flight Cancellations{% endif %}</h1>
+        <p class="manifest-subtitle">{% if display_whole_day_cancelled %}All flights and passengers for {{ active_day }} have been cancelled.{% else %}Review flights and cancel a whole day, a flight, or an individual booking.{% endif %}</p>
+    </div>
+    <div class="hero-actions" style="justify-content:flex-end;">
+        <form id="cancel-day-form" method="POST" action="/cancellations/cancel-day" style="margin:0;">
+            <input type="hidden" name="day" value="{{ active_day }}">
+            <input type="hidden" name="reason" value="other" class="reason-field">
+            <button type="button" class="export-btn" onclick="openCancelModal('cancel-day-form','day','','{{ active_day|e }}','','')">Cancel whole day</button>
+        </form>
+        <div class="day-toggle">
+            <a href="/cancellations/?day=today" class="day-pill {% if active_day == 'today' %}active{% endif %}">Today</a>
+            <a href="/cancellations/?day=tomorrow" class="day-pill {% if active_day == 'tomorrow' %}active{% endif %}">Tomorrow</a>
+        </div>
+    </div>
+</section>
+
+<section class="ops-row-2">
+    <article class="fd-stat"><div class="fd-stat-label">Flights cancelled</div><div class="fd-stat-value">{{ stats.flights_cancelled or 0 }}</div></article>
+    <article class="fd-stat"><div class="fd-stat-label">Passengers cancelled</div><div class="fd-stat-value">{{ stats.passengers_cancelled or 0 }}</div></article>
+</section>
+
+{% if manifests %}
+<section class="manifest-shell">
+    {% for manifest in manifests %}
+    <article class="flight-group-card {% if display_whole_day_cancelled or manifest.is_cancelled %}cancelled{% endif %}">
+        <div class="flight-group-top">
+            <div>
+                <p class="flight-label">{% if display_whole_day_cancelled or manifest.is_cancelled %}Cancelled flight{% else %}Cancellation flight{% endif %}</p>
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <h2 class="flight-time">{{ manifest.slot }}</h2>
+                    {% if display_whole_day_cancelled or manifest.is_cancelled %}<span class="manifest-chip dark">Cancelled</span>{% endif %}
+                </div>
+                <p class="flight-full">{{ manifest.slot_display_full }}</p>
+                {% if not display_whole_day_cancelled %}<div class="countdown-timer" data-slot="{{ manifest.slot_iso }}">Loading countdown…</div>{% endif %}
+            </div>
+            <div class="flight-side-actions">
+                <div class="flight-pax">{{ manifest.total_pax }} pax</div>
+                {% if not (display_whole_day_cancelled or manifest.is_cancelled) %}
+                <form id="flight-form-{{ loop.index }}" method="POST" action="/cancellations/cancel-flight" style="margin:0;">
+                    <input type="hidden" name="slot" value="{{ manifest.slot_display_full }}">
+                    <input type="hidden" name="day" value="{{ active_day }}">
+                    <input type="hidden" name="reason" value="other" class="reason-field">
+                    <button type="button" class="export-btn" onclick="openCancelModal('flight-form-{{ loop.index }}','flight','{{ manifest.slot_display_full|e }}','','','')">Cancel flight</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="manifest-list" style="margin-top:22px;">
+            {% for order in manifest.orders %}
+            <div class="manifest-line {% if display_whole_day_cancelled or order.is_cancelled %}cancelled{% endif %}" style="display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;">
+                <div>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                        <div class="manifest-name">{{ order.customer_name }}</div>
+                        {% if display_whole_day_cancelled or order.is_cancelled %}<span class="manifest-chip dark">Cancelled</span>{% elif order.cancel_status == 'failed' %}<span class="manifest-chip" style="color:var(--danger);">Failed</span>{% endif %}
+                    </div>
+                    <div class="manifest-meta" style="margin-top:6px;">{{ order.order_number }}</div>
+                    {% if order.email %}<div class="manifest-subtitle" style="margin-top:6px;">Email: {{ order.email }}</div>{% endif %}
+                    {% if order.mobile %}<div class="manifest-subtitle" style="margin-top:4px;">Mobile: {{ order.mobile }}</div>{% endif %}
+                    {% if order.pickup_location %}<div class="manifest-subtitle" style="margin-top:4px;">Pickup: {{ order.pickup_location }}</div>{% endif %}
+                    {% if order.pickup_time %}<div class="manifest-subtitle" style="margin-top:4px;">Pickup time: {{ order.pickup_time }}</div>{% endif %}
+                    {% if order.cancel_status == 'failed' and order.cancel_error %}<div class="manifest-subtitle" style="margin-top:4px;color:var(--danger);">{{ order.cancel_error }}</div>{% endif %}
+                </div>
+                <div class="manifest-badges">
+                    <span class="manifest-chip">{{ order.pax_total }} pax</span>
+                    {% if not (display_whole_day_cancelled or order.is_cancelled) %}
+                    <form id="order-form-{{ order.order_number }}" method="POST" action="/cancellations/cancel-order/{{ order.order_number }}" style="margin:0;">
+                        <input type="hidden" name="day" value="{{ active_day }}">
+                        <input type="hidden" name="reason" value="other" class="reason-field">
+                        <button type="button" class="export-btn" onclick="openCancelModal('order-form-{{ order.order_number }}','order','','{{ order.customer_name|default('Customer', true)|escape }}','{{ order.order_number|escape }}','{{ order.email|default('', true)|escape }}')">Cancel pax</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </article>
+    {% endfor %}
+</section>
+{% else %}
+<div class="fd-empty"><div class="manifest-name">No flights found for {{ active_day }}.</div></div>
+{% endif %}
+</div>
+
+<div id="cancel-modal" class="fd-modal">
+    <div class="fd-modal-card">
+        <h3 style="margin:0 0 10px 0;">Choose cancellation reason</h3>
+        <p id="cancel-modal-text" style="margin:0 0 12px 0;color:var(--text-soft);"></p>
+        <div id="cancel-customer-preview" style="display:none;margin:0 0 18px 0;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:14px;">
+            <div style="font-weight:700;margin-bottom:6px;">Recipient confirmation</div>
+            <div style="font-size:14px;line-height:1.6;">
+                <div><strong>Name:</strong> <span id="cancel-preview-name">-</span></div>
+                <div><strong>Order:</strong> <span id="cancel-preview-order">-</span></div>
+                <div><strong>Email:</strong> <span id="cancel-preview-email">-</span></div>
+            </div>
+        </div>
+        <div class="fd-modal-actions">
+            <button type="button" class="export-btn" onclick="submitCancelReason('weather')">Weather</button>
+            <button type="button" class="export-btn" onclick="submitCancelReason('other')">Other</button>
+            <button type="button" class="secondary-btn" onclick="closeCancelModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let activeCancelFormId = null;
+function openCancelModal(formId, type, slotOrDay, customerName, orderNumber, customerEmail) {
+  activeCancelFormId = formId;
+  const modal = document.getElementById('cancel-modal');
+  const textEl = document.getElementById('cancel-modal-text');
+  const previewBox = document.getElementById('cancel-customer-preview');
+  if (type === 'day') textEl.innerText = `Cancel the full ${slotOrDay} schedule?`;
+  else if (type === 'flight') textEl.innerText = `Cancel the ${slotOrDay} flight?`;
+  else textEl.innerText = `Cancel ${customerName || 'this booking'}?`;
+  if (customerName || orderNumber || customerEmail) {
+    previewBox.style.display = 'block';
+    document.getElementById('cancel-preview-name').textContent = customerName || '-';
+    document.getElementById('cancel-preview-order').textContent = orderNumber || '-';
+    document.getElementById('cancel-preview-email').textContent = customerEmail || '-';
+  } else {
+    previewBox.style.display = 'none';
+  }
+  modal.style.display = 'flex';
+}
+function closeCancelModal() {
+  document.getElementById('cancel-modal').style.display = 'none';
+  activeCancelFormId = null;
+}
+function submitCancelReason(reason) {
+  if (!activeCancelFormId) return;
+  const form = document.getElementById(activeCancelFormId);
+  const field = form.querySelector('.reason-field');
+  if (field) field.value = reason;
+  form.submit();
+}
+(function() {
+  function updateCountdowns() {
+    const now = new Date();
+    document.querySelectorAll('.countdown-timer').forEach(el => {
+      const iso = el.getAttribute('data-slot');
+      if (!iso) return;
+      const target = new Date(iso);
+      if (isNaN(target.getTime())) { el.textContent = 'Countdown unavailable'; return; }
+      const diff = target - now;
+      if (diff <= 0) { el.textContent = 'Flight time passed'; return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      el.textContent = `Flight in ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    });
+  }
+  updateCountdowns();
+  setInterval(updateCountdowns, 1000);
+})();
+</script>
+{% endblock %}

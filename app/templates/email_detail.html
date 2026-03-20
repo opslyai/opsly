@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="manifest-header-v2">
+    <div>
+        <p class="manifest-kicker">EMAIL DETAIL</p>
+        <h1 class="manifest-title">{{ email.subject }}</h1>
+        <p class="manifest-subtitle">From {{ email.sender }} · {{ email.updated_at }}</p>
+    </div>
+
+    <div class="day-switcher">
+        <a href="/communications/" class="day-pill active">Back to inbox</a>
+    </div>
+</section>
+
+<div class="manifest-shell">
+    {% for msg in email.messages %}
+    <div class="detail-card">
+        <h3>{{ msg.subject }}</h3>
+        <p><strong>From:</strong> {{ msg.sender }}</p>
+        <p><strong>Time:</strong> {{ msg.created_at }}</p>
+        <div class="json-box">{{ msg.body }}</div>
+    </div>
+    {% endfor %}
+
+    <div class="detail-card">
+        <h3>Raw JSON</h3>
+        <pre class="json-box">{{ email.raw }}</pre>
+    </div>
+</div>
+
+{% endblock %}

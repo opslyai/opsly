@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Opsly Login{% endblock %}
+{% block content %}
+<div class="login-shell login-shell-premium">
+    <div class="login-card login-card-premium">
+        <div class="login-copy">
+            <p class="eyebrow">OPS CONSOLE</p>
+            <h1>Welcome back</h1>
+            <p class="subtext">Sign in to access the Opsly admin console, live departures, customer handling workflows, and Olivia AI.</p>
+        </div>
+
+        <form method="POST" class="login-form">
+            <label class="login-label">Admin email</label>
+            <input type="email" name="email" placeholder="you@company.com" required>
+            <label class="login-label">Password</label>
+            <input type="password" name="password" placeholder="Enter your password" required>
+            <button type="submit" class="primary-btn login-btn">Login</button>
+        </form>
+
+        <div class="login-footer-row">
+            <span>Need access for your company?</span>
+            <a href="/contact">Send an inquiry</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

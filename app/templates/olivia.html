@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Olivia AI{% endblock %}
+{% block content %}
+<div class="olivia-page">
+    <section class="olivia-hero-grid olivia-hero-grid-balanced">
+        <article class="olivia-panel olivia-command-panel">
+            <div class="ops-kicker">AI operations agent</div>
+            <h1 class="olivia-title">Olivia</h1>
+            <p class="olivia-sub">Olivia now works as an ops copilot: morning briefings, tomorrow risk ranking, missing-weight detection, source performance, forward bookings, and action-ready recommendations.</p>
+            <div class="olivia-suggestions olivia-suggestions-balanced">
+                {% for q in quick_questions %}
+                <button type="button" class="olivia-suggestion" data-question="{{ q }}">{{ q }}</button>
+                {% endfor %}
+                <button type="button" class="olivia-suggestion" data-question="Give me the morning ops brief">Give me the morning ops brief</button>
+                <button type="button" class="olivia-suggestion" data-question="Which flights tomorrow are highest risk?">Which flights tomorrow are highest risk?</button>
+                <button type="button" class="olivia-suggestion" data-question="Show me missing weights for tomorrow">Show me missing weights for tomorrow</button>
+            </div>
+            <div class="olivia-input-row">
+                <input id="q" class="olivia-input" placeholder="Ask Olivia e.g. give me the morning ops brief">
+                <button id="ask-olivia" class="primary-btn" type="button">Ask Olivia</button>
+            </div>
+        </article>
+
+        <article class="olivia-panel">
+            <div class="ops-kicker">Live command context</div>
+            <div class="olivia-stats-grid olivia-stats-grid-balanced">
+                <div class="olivia-stat"><span>Orders today</span><strong>{{ stats.today_orders }}</strong></div>
+                <div class="olivia-stat"><span>Cancelled today</span><strong>{{ stats.today_cancelled_orders }}</strong></div>
+                <div class="olivia-stat"><span>Passengers today</span><strong>{{ stats.today_passengers }}</strong></div>
+                <div class="olivia-stat"><span>Tomorrow pax</span><strong>{{ stats.tomorrow_passengers }}</strong></div>
+                <div class="olivia-stat"><span>30d confirmed</span><strong>{{ stats.last_30.confirmed_orders if stats.last_30 else stats.bookings_30d }}</strong></div>
+                <div class="olivia-stat"><span>Next 30d rev</span><strong>${{ '{:,.0f}'.format(stats.next_30.confirmed_revenue if stats.next_30 else stats.future_revenue_30d) }}</strong></div>
+            </div>
+            <div class="olivia-mini-note">Olivia uses the current cached ops state, day snapshots, booking history, and live weather to build each answer.</div>
+        </article>
+    </section>
+
+    <section class="olivia-layout olivia-main-layout olivia-main-layout-balanced">
+        <article class="olivia-panel olivia-answer-shell">
+            <div class="olivia-answer-top">
+                <div>
+                    <div class="ops-kicker">Olivia response</div>
+                    <h2 class="olivia-section-title" id="olivia-headline">{{ starter.payload.headline if starter and starter.payload else 'Olivia is ready' }}</h2>
+                </div>
+                <div class="olivia-chip" id="olivia-intent">{{ starter.intent|replace('_', ' ')|title if starter else 'Ready' }}</div>
+            </div>
+            <p id="olivia-summary" class="olivia-summary">{{ starter.payload.summary if starter and starter.payload else starter.answer }}</p>
+            <div id="olivia-metrics" class="olivia-metrics-grid"></div>
+            <div class="olivia-block-grid">
+                <div class="olivia-block">
+                    <h3>Risks</h3>
+                    <div id="olivia-risks" class="olivia-list empty-state">No risk analysis yet.</div>
+                </div>
+                <div class="olivia-block">
+                    <h3>Recommended next actions</h3>
+                    <div id="olivia-actions" class="olivia-list empty-state">Ask Olivia for an ops brief to see recommended actions.</div>
+                </div>
+            </div>
+            <div class="olivia-block">
+                <h3>Detail board</h3>
+                <div id="olivia-table" class="olivia-table-wrap empty-state">No structured detail returned yet.</div>
+            </div>
+            <div class="olivia-footer-row">
+                <div id="olivia-answer" class="olivia-answer-text">{{ starter.answer if starter else 'Olivia is ready.' }}</div>
+                <div id="olivia-generated" class="olivia-mini-note">{{ starter.payload.generated_at if starter and starter.payload else '' }}</div>
+            </div>
+        </article>
+
+        <aside class="olivia-side-stack olivia-side-stack-balanced">
+            <article class="olivia-card">
+                <div class="ops-kicker">Live weather</div>
+                <div class="weather-hero" style="margin-top:10px;">
+                    <div class="weather-art {{ weather.variant or 'cloudy' }}" data-icon="{{ weather.icon or '☁️' }}"></div>
+                    <div class="weather-summary-line">
+                        <div class="weather-temp">{% if weather.temperature is not none %}{{ weather.temperature|round|int }}°{% else %}--{% endif %}</div>
+                        <div class="olivia-sub">{{ weather.location }} · {{ weather.summary }}</div>
+                    </div>
+                </div>
+                <div class="weather-grid" style="margin-top:16px;">
+                    <div class="cell"><div class="label">Wind</div><div class="value">{{ weather.wind_speed if weather.wind_speed is not none else '--' }} km/h</div></div>
+                    <div class="cell"><div class="label">Humidity</div><div class="value">{{ weather.humidity if weather.humidity is not none else '--' }}%</div></div>
+                    <div class="cell"><div class="label">Today rain</div><div class="value">{{ weather.today.rain_chance if weather.today and weather.today.rain_chance is not none else '--' }}%</div></div>
+                    <div class="cell"><div class="label">Tomorrow rain</div><div class="value">{{ weather.tomorrow.rain_chance if weather.tomorrow and weather.tomorrow.rain_chance is not none else '--' }}%</div></div>
+                </div>
+            </article>
+
+            <article class="olivia-card">
+                <div class="ops-kicker">Ops insights</div>
+                <div class="insight-list" style="margin-top:14px;">
+                    {% for item in insights %}
+                    <div class="insight-item">
+                        {% if item.title %}<strong>{{ item.title }}</strong>{% endif %}
+                        {% if item.detail %}<span>{{ item.detail }}</span>{% else %}<span>{{ item }}</span>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="olivia-card">
+                <div class="ops-kicker">Top sources</div>
+                <table class="breakdown-table" style="margin-top:8px;">
+                    <thead><tr><th>Source</th><th>Bookings</th><th>Revenue</th></tr></thead>
+                    <tbody>
+                    {% for row in source_breakdown[:6] %}
+                        <tr><td>{{ row.source }}</td><td>{{ row.bookings }}</td><td>${{ '{:,.0f}'.format(row.revenue) }}</td></tr>
+                    {% endfor %}
+                    {% if not source_breakdown %}
+                        <tr><td colspan="3">No source data available yet</td></tr>
+                    {% endif %}
+                    </tbody>
+                </table>
+            </article>
+        </aside>
+    </section>
+</div>
+
+<script>
+const STARTER = {{ starter|tojson }};
+
+function setList(el, items, emptyText) {
+  if (!el) return;
+  if (!items || !items.length) {
+    el.classList.add('empty-state');
+    el.innerHTML = emptyText;
+    return;
+  }
+  el.classList.remove('empty-state');
+  el.innerHTML = items.map(item => `<div class="olivia-list-item">${item}</div>`).join('');
+}
+
+function renderMetrics(metrics) {
+  const el = document.getElementById('olivia-metrics');
+  if (!el) return;
+  if (!metrics || !metrics.length) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = metrics.map(metric => `
+    <div class="olivia-metric-card">
+      <span>${metric.label || ''}</span>
+      <strong>${metric.value ?? ''}</strong>
+    </div>
+  `).join('');
+}
+
+function rowsToTable(rows) {
+  if (!rows || !rows.length) return '<div class="empty-state">No structured detail returned yet.</div>';
+  const keys = Object.keys(rows[0]);
+  const header = `<thead><tr>${keys.map(key => `<th>${key.replaceAll('_', ' ')}</th>`).join('')}</tr></thead>`;
+  const body = `<tbody>${rows.map(row => `<tr>${keys.map(key => `<td>${row[key] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  return `<table class="breakdown-table olivia-data-table">${header}${body}</table>`;
+}
+
+function renderDetailBoard(payload) {
+  const tableWrap = document.getElementById('olivia-table');
+  if (!tableWrap) return;
+  if (payload.ranked_flights) {
+    tableWrap.classList.remove('empty-state');
+    tableWrap.innerHTML = rowsToTable(payload.ranked_flights);
+    return;
+  }
+  if (payload.rows) {
+    tableWrap.classList.remove('empty-state');
+    tableWrap.innerHTML = rowsToTable(payload.rows);
+    return;
+  }
+  if (payload.flights) {
+    tableWrap.classList.remove('empty-state');
+    tableWrap.innerHTML = rowsToTable(payload.flights);
+    return;
+  }
+  if (payload.top_sources) {
+    tableWrap.classList.remove('empty-state');
+    tableWrap.innerHTML = rowsToTable(payload.top_sources);
+    return;
+  }
+  if (payload.breakdown) {
+    tableWrap.classList.remove('empty-state');
+    tableWrap.innerHTML = rowsToTable(payload.breakdown);
+    return;
+  }
+  tableWrap.classList.add('empty-state');
+  tableWrap.innerHTML = payload.draft ? `<div class="olivia-draft-box">${payload.draft}</div>` : 'No structured detail returned yet.';
+}
+
+function renderPayload(data) {
+  const payload = data.payload || {};
+  document.getElementById('olivia-headline').textContent = payload.headline || 'Olivia response';
+  document.getElementById('olivia-summary').textContent = payload.summary || data.answer || 'No summary returned.';
+  document.getElementById('olivia-intent').textContent = (data.intent || 'response').replaceAll('_', ' ');
+  document.getElementById('olivia-answer').textContent = data.answer || 'No answer returned.';
+  document.getElementById('olivia-generated').textContent = payload.generated_at || '';
+  renderMetrics(payload.metrics || []);
+  setList(document.getElementById('olivia-risks'), payload.risks || [], 'No risks returned for this request.');
+  setList(document.getElementById('olivia-actions'), payload.actions || [], 'No next actions returned for this request.');
+  renderDetailBoard(payload);
+}
+
+async function askOlivia(question) {
+  const input = document.getElementById('q');
+  const query = question || input.value;
+  input.value = query;
+  document.getElementById('olivia-summary').textContent = 'Olivia is thinking through the current ops data...';
+  document.getElementById('olivia-answer').textContent = 'Working...';
+  try {
+    const response = await fetch('/api/olivia/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query})
+    });
+    const data = await response.json();
+    renderPayload(data);
+  } catch (error) {
+    document.getElementById('olivia-answer').textContent = 'Olivia could not answer right now.';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  renderPayload(STARTER);
+  document.getElementById('ask-olivia')?.addEventListener('click', function () { askOlivia(); });
+  document.getElementById('q')?.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') { event.preventDefault(); askOlivia(); }
+  });
+  document.querySelectorAll('.olivia-suggestion').forEach(function (button) {
+    button.addEventListener('click', function () { askOlivia(button.dataset.question || ''); });
+  });
+});
+</script>
+{% endblock %}

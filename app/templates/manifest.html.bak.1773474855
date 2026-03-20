@@ -1,0 +1,548 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.flightdeck-wrap{
+    display:flex;
+    flex-direction:column;
+    gap:22px;
+}
+.fd-hero{
+    position:relative;
+    overflow:hidden;
+    border-radius:30px;
+    padding:28px;
+    background:
+        radial-gradient(circle at top right, rgba(233,180,112,0.24), transparent 28%),
+        linear-gradient(135deg, #fff9f1 0%, #f7ecdd 46%, #efe1cf 100%);
+    border:1px solid rgba(120,85,45,0.10);
+    box-shadow:0 24px 60px rgba(73,48,27,0.10);
+}
+.fd-kicker{
+    margin:0 0 8px 0;
+    font-size:0.78rem;
+    letter-spacing:0.18em;
+    font-weight:800;
+    color:#9b6432;
+    text-transform:uppercase;
+}
+.fd-title-row{
+    display:flex;
+    justify-content:space-between;
+    gap:16px;
+    align-items:flex-start;
+    flex-wrap:wrap;
+}
+.fd-title{
+    margin:0;
+    font-size:2.6rem;
+    line-height:1;
+    font-family:"Plus Jakarta Sans", sans-serif;
+}
+.fd-sub{
+    margin:10px 0 0 0;
+    color:#6b5a4d;
+    max-width:780px;
+    line-height:1.55;
+}
+.fd-day-toggle{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:22px;
+}
+.fd-day-pill{
+    padding:12px 16px;
+    border-radius:999px;
+    font-weight:800;
+    background:#eadbc8;
+    color:#493226;
+    border:1px solid transparent;
+}
+.fd-day-pill.active{
+    background:linear-gradient(135deg,#a96d39,#7d4e2b);
+    color:#fff8ef;
+    box-shadow:0 12px 28px rgba(127,79,42,0.18);
+}
+.fd-actions{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-top:22px;
+}
+.fd-grid{
+    display:grid;
+    grid-template-columns:repeat(5, minmax(0, 1fr));
+    gap:16px;
+}
+.fd-stat{
+    border-radius:22px;
+    padding:18px;
+    background:rgba(255,255,255,0.68);
+    border:1px solid rgba(120,85,45,0.08);
+    box-shadow:0 16px 35px rgba(71,49,30,0.06);
+}
+.fd-stat-label{
+    color:#8f6238;
+    text-transform:uppercase;
+    letter-spacing:0.12em;
+    font-size:0.74rem;
+    font-weight:800;
+    margin-bottom:8px;
+}
+.fd-stat-value{
+    font-size:2rem;
+    font-weight:800;
+    font-family:"Plus Jakarta Sans", sans-serif;
+}
+.fd-stat-sub{
+    margin-top:6px;
+    color:#6d5c4f;
+    font-size:0.92rem;
+}
+.fd-flight{
+    border-radius:28px;
+    padding:24px;
+    background:rgba(255,255,255,0.62);
+    border:1px solid rgba(120,85,45,0.10);
+    box-shadow:0 20px 44px rgba(71,49,30,0.07);
+}
+.fd-flight.cancelled{
+    background:linear-gradient(180deg, #fff6f1 0%, #f7e6db 100%);
+    border:2px solid #b36a3a;
+}
+.fd-flight-top{
+    display:flex;
+    justify-content:space-between;
+    gap:18px;
+    align-items:flex-start;
+    flex-wrap:wrap;
+}
+.fd-chip{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:10px 14px;
+    border-radius:999px;
+    font-size:0.92rem;
+    font-weight:800;
+    background:#eadbc8;
+    color:#503527;
+}
+.fd-chip.dark{
+    background:#4b2c1f;
+    color:#fff8ef;
+}
+.fd-flight-time{
+    margin:4px 0 4px 0;
+    font-family:"Plus Jakarta Sans", sans-serif;
+    font-size:2.3rem;
+    line-height:1;
+}
+.fd-flight-full{
+    color:#6a594b;
+    margin-top:8px;
+}
+.fd-flight-ops{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+}
+.fd-countdown{
+    margin-top:10px;
+    font-weight:800;
+    color:#9a6334;
+}
+.fd-orders{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+    margin-top:20px;
+}
+.fd-order{
+    border-radius:22px;
+    padding:20px;
+    background:#fffdfa;
+    border:1px solid rgba(120,85,45,0.08);
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:16px;
+}
+.fd-order.cancelled{
+    background:#fbefe7;
+    border-color:#d29a72;
+}
+.fd-order-head{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+}
+.fd-order-name{
+    font-size:1.55rem;
+    font-weight:800;
+    font-family:"Plus Jakarta Sans", sans-serif;
+}
+.fd-order-sub{
+    margin-top:4px;
+    color:#68574a;
+    font-size:1rem;
+}
+.fd-meta-grid{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+    gap:12px;
+    margin-top:16px;
+}
+.fd-meta{
+    padding:12px 14px;
+    border-radius:18px;
+    background:#f7f1ea;
+}
+.fd-meta-label{
+    font-size:0.74rem;
+    font-weight:800;
+    color:#9b6432;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    margin-bottom:6px;
+}
+.fd-meta-value{
+    font-size:1rem;
+    font-weight:700;
+    color:#372a21;
+    line-height:1.45;
+    word-break:break-word;
+}
+.fd-passengers{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    margin-top:16px;
+}
+.fd-pax{
+    border-radius:18px;
+    background:#fcf9f6;
+    padding:14px 16px;
+    border:1px solid rgba(120,85,45,0.07);
+}
+.fd-pax-name{
+    font-size:1.08rem;
+    font-weight:800;
+}
+.fd-pax-lines{
+    margin-top:6px;
+    color:#5f5044;
+    line-height:1.5;
+}
+.fd-order-actions{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    align-items:flex-end;
+    justify-content:flex-start;
+}
+.fd-empty{
+    border-radius:24px;
+    padding:30px;
+    background:rgba(255,255,255,0.55);
+    border:1px solid rgba(120,85,45,0.08);
+}
+.fd-modal{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(15,10,8,0.55);
+    z-index:9999;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+}
+.fd-modal-card{
+    width:min(520px, 100%);
+    border-radius:26px;
+    background:#fffaf4;
+    padding:24px;
+    box-shadow:0 30px 80px rgba(0,0,0,0.26);
+}
+.fd-modal-card h3{
+    margin:0 0 8px 0;
+    font-family:"Plus Jakarta Sans", sans-serif;
+    font-size:1.5rem;
+}
+.fd-modal-card p{
+    color:#6c5b4f;
+    line-height:1.5;
+}
+.fd-modal-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:18px;
+}
+@media (max-width:1200px){
+    .fd-grid{grid-template-columns:repeat(3, minmax(0,1fr));}
+    .fd-meta-grid{grid-template-columns:repeat(2, minmax(0,1fr));}
+}
+@media (max-width:840px){
+    .fd-grid{grid-template-columns:repeat(2, minmax(0,1fr));}
+    .fd-order{grid-template-columns:1fr;}
+    .fd-order-actions{align-items:stretch;}
+}
+@media (max-width:560px){
+    .fd-grid{grid-template-columns:1fr;}
+    .fd-meta-grid{grid-template-columns:1fr;}
+    .fd-title{font-size:2rem;}
+    .fd-flight-time{font-size:1.8rem;}
+    .fd-order-name{font-size:1.25rem;}
+}
+</style>
+
+<div class="flightdeck-wrap">
+    <section class="fd-hero">
+        <p class="fd-kicker">Opsly unified operations page</p>
+        <div class="fd-title-row">
+            <div>
+                <h1 class="fd-title">{{ page_name or "Flight Deck" }}</h1>
+                <p class="fd-sub">
+                    Manifests, cancellations and pickup comms all in one place.
+                    Cancel a pax, a whole flight or the whole day, and send pickup info per pax, per flight or for all stays in one hit.
+                </p>
+            </div>
+            <div class="fd-chip {% if stats.whole_day_cancelled %}dark{% endif %}">
+                {{ active_day|title }}{% if stats.whole_day_cancelled %} · Whole day cancelled{% endif %}
+            </div>
+        </div>
+
+        <div class="fd-day-toggle">
+            <a class="fd-day-pill {% if active_day == 'today' %}active{% endif %}" href="{{ url_for('manifest.home', day='today') }}">Today</a>
+            <a class="fd-day-pill {% if active_day == 'tomorrow' %}active{% endif %}" href="{{ url_for('manifest.home', day='tomorrow') }}">Tomorrow</a>
+        </div>
+
+        <div class="fd-actions">
+            <a href="{{ url_for('manifest.refresh_snapshot', day=active_day) }}" class="secondary-btn">Refresh day data</a>
+
+            <form method="POST" action="{{ url_for('manifest.send_pickup_day') }}" style="margin:0;">
+                <input type="hidden" name="day" value="{{ active_day }}">
+                <button type="submit" class="secondary-btn" onclick="return confirm('Send pickup information for the whole {{ active_day }} schedule?')">Send pickup for all stays</button>
+            </form>
+
+            <form id="cancel-day-form" method="POST" action="/cancellations/cancel-day" style="margin:0;">
+                <input type="hidden" name="day" value="{{ active_day }}">
+                <input type="hidden" name="reason" id="cancel-day-reason" value="other">
+                <button type="button" class="export-btn" onclick="openCancelModal('cancel-day-form','whole {{ active_day }} schedule')">Cancel whole day</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="fd-grid">
+        <div class="fd-stat">
+            <div class="fd-stat-label">Flights</div>
+            <div class="fd-stat-value">{{ stats.flights }}</div>
+            <div class="fd-stat-sub">{{ stats.cancelled_flights }} cancelled</div>
+        </div>
+        <div class="fd-stat">
+            <div class="fd-stat-label">Orders</div>
+            <div class="fd-stat-value">{{ stats.orders }}</div>
+            <div class="fd-stat-sub">Live bookings loaded</div>
+        </div>
+        <div class="fd-stat">
+            <div class="fd-stat-label">Passengers</div>
+            <div class="fd-stat-value">{{ stats.passengers }}</div>
+            <div class="fd-stat-sub">{{ stats.cancelled_passengers }} cancelled</div>
+        </div>
+        <div class="fd-stat">
+            <div class="fd-stat-label">Revenue</div>
+            <div class="fd-stat-value">${{ stats.revenue }}</div>
+            <div class="fd-stat-sub">Gross booked value</div>
+        </div>
+        <div class="fd-stat">
+            <div class="fd-stat-label">Refund exposure</div>
+            <div class="fd-stat-value">${{ stats.refunds }}</div>
+            <div class="fd-stat-sub">Based on cancelled pax</div>
+        </div>
+    </section>
+
+    {% if error %}
+        <section class="fd-empty">
+            <h3 style="margin-top:0;">Could not load Flight Deck</h3>
+            <p style="margin-bottom:0;">{{ error }}</p>
+        </section>
+    {% endif %}
+
+    {% if manifests %}
+        {% for manifest in manifests %}
+            <section class="fd-flight {% if manifest.is_cancelled %}cancelled{% endif %}">
+                <div class="fd-flight-top">
+                    <div>
+                        <div class="fd-kicker">{% if manifest.is_cancelled %}Cancelled flight{% else %}Flight ready{% endif %}</div>
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                            <h2 class="fd-flight-time">{{ manifest.slot }}</h2>
+                            {% if manifest.is_cancelled %}
+                                <span class="fd-chip dark">Cancelled</span>
+                            {% endif %}
+                            <span class="fd-chip">{{ manifest.total_pax }} pax</span>
+                        </div>
+                        <div class="fd-flight-full">{{ manifest.slot_display_full }}</div>
+                        {% if not manifest.is_cancelled and manifest.slot_iso %}
+                            <div class="fd-countdown" data-slot="{{ manifest.slot_iso }}">Loading countdown…</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="fd-flight-ops">
+                        <a href="{{ url_for('manifest.export_pdf', day=active_day, slot=manifest.slot_iso) }}" class="secondary-btn">Export PDF</a>
+
+                        <form method="POST" action="{{ url_for('manifest.send_pickup_flight') }}" style="margin:0;">
+                            <input type="hidden" name="day" value="{{ active_day }}">
+                            <input type="hidden" name="slot" value="{{ manifest.slot_display_full }}">
+                            <button type="submit" class="secondary-btn" onclick="return confirm('Send pickup information for the whole {{ manifest.slot_display_full|e }} flight?')">Send flight pickup</button>
+                        </form>
+
+                        <form id="cancel-flight-{{ loop.index }}" method="POST" action="/cancellations/cancel-flight" style="margin:0;">
+                            <input type="hidden" name="slot" value="{{ manifest.slot_display_full }}">
+                            <input type="hidden" name="day" value="{{ active_day }}">
+                            <input type="hidden" name="reason" class="cancel-reason" value="other">
+                            <button type="button" class="export-btn" onclick="openCancelModal('cancel-flight-{{ loop.index }}','{{ manifest.slot_display_full|e }}')">Cancel whole flight</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="fd-orders">
+                    {% for order in manifest.orders %}
+                        <article class="fd-order {% if order.is_cancelled %}cancelled{% endif %}">
+                            <div>
+                                <div class="fd-order-head">
+                                    <div class="fd-order-name">{{ order.customer_name }}</div>
+                                    <span class="fd-chip">{{ order.pax_total }} pax</span>
+                                    {% if order.is_cancelled %}
+                                        <span class="fd-chip dark">Cancelled</span>
+                                    {% endif %}
+                                </div>
+                                <div class="fd-order-sub">
+                                    {{ order.product_name or manifest.product_name or "Reef & Island Scenic Flight" }} · {{ order.order_number }}
+                                </div>
+
+                                <div class="fd-meta-grid">
+                                    <div class="fd-meta">
+                                        <div class="fd-meta-label">Pickup</div>
+                                        <div class="fd-meta-value">{{ order.pickup_time or "No pickup time" }} · {{ order.pickup_location or "No pickup location" }}</div>
+                                    </div>
+                                    <div class="fd-meta">
+                                        <div class="fd-meta-label">Email</div>
+                                        <div class="fd-meta-value">{{ order.email or "No email" }}</div>
+                                    </div>
+                                    <div class="fd-meta">
+                                        <div class="fd-meta-label">Mobile</div>
+                                        <div class="fd-meta-value">{{ order.mobile or "No phone" }}</div>
+                                    </div>
+                                    <div class="fd-meta">
+                                        <div class="fd-meta-label">Order</div>
+                                        <div class="fd-meta-value">{{ order.order_weight_total or order.total_weight or "-" }} kg total · {{ order.pax_total }} pax</div>
+                                    </div>
+                                </div>
+
+                                {% if order.passengers %}
+                                    <div class="fd-passengers">
+                                        {% for pax in order.passengers %}
+                                            <div class="fd-pax">
+                                                <div class="fd-pax-name">{{ pax.name }}</div>
+                                                <div class="fd-pax-lines">
+                                                    {% if pax.weight_lines %}
+                                                        {{ pax.weight_lines|join(" · ") }}<br>
+                                                    {% elif pax.weight %}
+                                                        {{ pax.weight }} kg<br>
+                                                    {% endif %}
+                                                    Email: {{ pax.email or order.email or "No email" }}<br>
+                                                    Mobile: {{ pax.mobile or order.mobile or "No phone" }}
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="fd-order-actions">
+                                <form method="POST" action="{{ url_for('manifest.send_pickup', order_number=order.order_number) }}" style="margin:0;width:100%;">
+                                    <input type="hidden" name="day" value="{{ active_day }}">
+                                    <button type="submit" class="secondary-btn" style="width:100%;">Send pickup info</button>
+                                </form>
+
+                                <form id="cancel-order-{{ order.order_number }}" method="POST" action="/cancellations/cancel-order/{{ order.order_number }}" style="margin:0;width:100%;">
+                                    <input type="hidden" name="day" value="{{ active_day }}">
+                                    <input type="hidden" name="reason" class="cancel-reason" value="other">
+                                    <button type="button" class="export-btn" style="width:100%;" onclick="openCancelModal('cancel-order-{{ order.order_number }}','{{ order.customer_name|e }} · {{ order.order_number|e }}')">Cancel pax</button>
+                                </form>
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endfor %}
+    {% else %}
+        <section class="fd-empty">
+            <h3 style="margin-top:0;">No flights found</h3>
+            <p style="margin-bottom:0;">There are no flights loaded for {{ active_day }}.</p>
+        </section>
+    {% endif %}
+</div>
+
+<div class="fd-modal" id="cancel-modal">
+    <div class="fd-modal-card">
+        <h3>Choose cancellation reason</h3>
+        <p id="cancel-modal-copy">Are you sure?</p>
+        <div class="fd-modal-actions">
+            <button type="button" class="export-btn" onclick="submitCancelReason('weather')">Weather</button>
+            <button type="button" class="secondary-btn" onclick="submitCancelReason('other')">Other</button>
+            <button type="button" class="secondary-btn" onclick="closeCancelModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let activeCancelForm = null;
+
+function openCancelModal(formId, itemLabel) {
+    activeCancelForm = document.getElementById(formId);
+    document.getElementById('cancel-modal-copy').innerText = `Are you sure you want to cancel ${itemLabel}?`;
+    document.getElementById('cancel-modal').style.display = 'flex';
+}
+
+function closeCancelModal() {
+    document.getElementById('cancel-modal').style.display = 'none';
+    activeCancelForm = null;
+}
+
+function submitCancelReason(reason) {
+    if (!activeCancelForm) return;
+    const reasonField = activeCancelForm.querySelector('.cancel-reason') || document.getElementById('cancel-day-reason');
+    if (reasonField) reasonField.value = reason;
+    activeCancelForm.submit();
+}
+
+(function() {
+    function updateCountdowns() {
+        const now = new Date();
+        document.querySelectorAll('.fd-countdown').forEach(el => {
+            const iso = el.getAttribute('data-slot');
+            if (!iso) return;
+            const target = new Date(iso);
+            if (isNaN(target.getTime())) {
+                el.textContent = 'Countdown unavailable';
+                return;
+            }
+            const diff = target - now;
+            if (diff <= 0) {
+                el.textContent = 'Flight time passed';
+                return;
+            }
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            el.textContent = `Flight in ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        });
+    }
+    updateCountdowns();
+    setInterval(updateCountdowns, 1000);
+})();
+</script>
+{% endblock %}

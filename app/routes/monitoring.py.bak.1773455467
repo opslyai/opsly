@@ -1,0 +1,112 @@
+import json
+from flask import Blueprint, render_template
+from flask_login import login_required
+from app.services.rezdy import get_order_detail
+
+monitoring = Blueprint("monitoring", __name__, url_prefix="/monitoring")
+
+def _safe_json(value):
+    try:
+        return json.dumps(value, indent=2, ensure_ascii=False, default=str)
+    except Exception:
+        return str(value)
+
+def _normalise_order(order):
+    order = order or {}
+    pickup = order.get("pickup") if isinstance(order.get("pickup"), dict) else {}
+    passengers = order.get("passengers") or []
+
+    email = (
+        order.get("email")
+        or order.get("customer_email")
+        or ""
+    )
+    mobile = (
+        order.get("mobile")
+        or order.get("phone")
+        or order.get("customer_mobile")
+        or ""
+    )
+
+    cleaned_passengers = []
+    for p in passengers:
+        cleaned_passengers.append({
+            "name": p.get("name") or p.get("full_name") or "Passenger",
+            "email": p.get("email") or email,
+            "mobile": p.get("mobile") or p.get("phone") or mobile,
+            "weight": p.get("weight"),
+        })
+
+    return {
+        "customer_name": order.get("customer_name") or "Unknown customer",
+        "order_number": order.get("order_number") or "",
+        "status": order.get("status") or "failed",
+        "email": email,
+        "mobile": mobile,
+        "pickup_location": pickup.get("location_short") or order.get("pickup_location") or "",
+        "pickup_time": pickup.get("pickup_time") or order.get("pickup_time") or "",
+        "pickup_date": pickup.get("pickup_date") or order.get("pickup_date") or "",
+        "passengers": cleaned_passengers,
+        "raw": order,
+    }
+
+@monitoring.route("/")
+@login_required
+def home():
+    return render_template("monitoring.html")
+
+@monitoring.route("/debug/customer")
+@monitoring.route("/debug/customer/<order_number>")
+@login_required
+def debug_customer(order_number="WATEKFAAG"):
+    rezdy_today = None
+    rezdy_tomorrow = None
+    merged = {}
+
+    try:
+        rezdy_today = get_order_detail(order_number, day_offset=0)
+    except Exception as e:
+        rezdy_today = {"error": str(e)}
+
+    try:
+        rezdy_tomorrow = get_order_detail(order_number, day_offset=1)
+    except Exception as e:
+        rezdy_tomorrow = {"error": str(e)}
+
+    if isinstance(rezdy_today, dict) and rezdy_today and not rezdy_today.get("error"):
+        merged = _normalise_order(rezdy_today)
+        source_used = "rezdy_today"
+    elif isinstance(rezdy_tomorrow, dict) and rezdy_tomorrow and not rezdy_tomorrow.get("error"):
+        merged = _normalise_order(rezdy_tomorrow)
+        source_used = "rezdy_tomorrow"
+    else:
+        merged = {
+            "customer_name": "Dominic Bannwart",
+            "order_number": order_number,
+            "status": "FAILED",
+            "email": "",
+            "mobile": "",
+            "pickup_location": "",
+            "pickup_time": "",
+            "pickup_date": "",
+            "passengers": [],
+            "raw": {},
+        }
+        source_used = "none"
+
+    return render_template(
+        "monitoring_debug_customer.html",
+        order_number=merged.get("order_number") or order_number,
+        customer_name=merged.get("customer_name"),
+        status=merged.get("status"),
+        email=merged.get("email"),
+        mobile=merged.get("mobile"),
+        pickup_location=merged.get("pickup_location"),
+        pickup_time=merged.get("pickup_time"),
+        pickup_date=merged.get("pickup_date"),
+        passengers=merged.get("passengers") or [],
+        source_used=source_used,
+        rezdy_today_json=_safe_json(rezdy_today),
+        rezdy_tomorrow_json=_safe_json(rezdy_tomorrow),
+        merged_json=_safe_json(merged),
+    )

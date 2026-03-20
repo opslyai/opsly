@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="orders-wrap">
+  <section class="orders-hero">
+    <p class="orders-kicker">Rezdy order desk</p>
+    <h1 class="orders-title">Orders</h1>
+    <p class="orders-sub">Review inbound booking emails, parse the WAT booking, enrich traveller details, and push the full manual-payment booking object back to Rezdy so participant fields update safely.</p>
+  </section>
+
+  <section class="orders-grid">
+    <div class="orders-stat"><div class="orders-stat-label">Visible orders</div><div class="orders-stat-value">{{ total_orders }}</div></div>
+    <div class="orders-stat"><div class="orders-stat-label">New orders</div><div class="orders-stat-value">{{ new_orders }}</div></div>
+    <div class="orders-stat"><div class="orders-stat-label">Cancelled orders</div><div class="orders-stat-value">{{ cancelled_orders }}</div></div>
+    <div class="orders-stat"><div class="orders-stat-label">Processed today</div><div class="orders-stat-value">{{ processed_today }}</div></div>
+  </section>
+
+  <section class="orders-list">
+    {% for row in rows %}
+    <article class="order-card" id="card-{{ row.id }}">
+      <div class="order-top">
+        <div>
+          <div class="order-chip-row">
+            <span class="order-chip">{{ row.status or 'confirmed' }}</span>
+            {% if row.agent %}<span class="order-chip">{{ row.agent }}</span>{% endif %}
+          </div>
+          <h2 class="order-name">{{ row.customer_name }}</h2>
+          <div class="order-subline order-number-text">{{ row.order_number or 'No WAT number parsed yet' }}</div>
+        </div>
+        <div class="order-actions">
+          <button class="order-btn process-btn" data-id="{{ row.id }}">Process</button>
+        </div>
+      </div>
+
+      <div class="order-meta">
+        <div class="order-meta-box"><div class="order-meta-label">Subject</div><div class="order-meta-value">{{ row.subject }}</div></div>
+        <div class="order-meta-box"><div class="order-meta-label">Sender</div><div class="order-meta-value">{{ row.sender or '—' }}</div></div>
+        <div class="order-meta-box"><div class="order-meta-label">Order number</div><div class="order-meta-value order-number-value">{{ row.order_number or '—' }}</div></div>
+        <div class="order-meta-box"><div class="order-meta-label">Agent</div><div class="order-meta-value">{{ row.agent or '—' }}</div></div>
+        <div class="order-meta-box"><div class="order-meta-label">Time</div><div class="order-meta-value">{{ row.timestamp or '—' }}</div></div>
+      </div>
+
+      <div class="order-result" id="result-{{ row.id }}"></div>
+    </article>
+    {% endfor %}
+  </section>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".process-btn").forEach(function (btn) {
+    btn.addEventListener("click", async function () {
+      const id = btn.dataset.id;
+      const card = document.getElementById("card-" + id);
+      const result = document.getElementById("result-" + id);
+      btn.disabled = true;
+      btn.textContent = "Processing...";
+      result.className = "order-result";
+      result.style.display = "block";
+      result.textContent = "Processing order and syncing supported booking fields...";
+
+      try {
+        const res = await fetch("/orders/process/" + encodeURIComponent(id), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+          result.className = "order-result ok";
+          result.textContent =
+            "Updated " + data.order_number +
+            "\nCustomer: " + (data.customer_name || "-") +
+            "\nTravellers found: " + data.traveller_count +
+            "\nEmail used: " + (data.email_used || "-") +
+            "\nPhone used: " + (data.phone_used || "-") +
+            "\nSaved locally: " + ((data.saved_locally ? "yes" : "no"));
+
+          const subline = card.querySelector(".order-number-text");
+          const numberValue = card.querySelector(".order-number-value");
+          if (subline) subline.textContent = data.order_number || "Updated in Rezdy";
+          if (numberValue) numberValue.textContent = data.order_number || "—";
+          btn.textContent = "Processed";
+        } else {
+          result.className = "order-result err";
+          result.textContent = "Failed: " + (data.error || JSON.stringify(data));
+          btn.textContent = "Retry";
+        }
+      } catch (e) {
+        result.className = "order-result err";
+        result.textContent = "Error processing order.";
+        btn.textContent = "Retry";
+      }
+
+      btn.disabled = false;
+    });
+  });
+});
+</script>
+{% endblock %}

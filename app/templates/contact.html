@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Contact Opsly{% endblock %}
+{% block content %}
+<div class="marketing-page">
+  <section class="marketing-hero">
+    <p class="marketing-kicker">Contact</p>
+    <h1 class="marketing-title">Talk to Opsly.</h1>
+    <p class="marketing-sub">For demos, onboarding, pilot programs, partnerships, or local operator conversations, reach out directly using the details below.</p>
+  </section>
+  <section class="contact-grid contact-grid-pro">
+    <article class="marketing-card"><h3>Email</h3><p><a class="contact-link" href="mailto:{{ contact_email }}">{{ contact_email }}</a></p><p>Best for demos, setup support, early access, and commercial enquiries.</p></article>
+    <article class="marketing-card"><h3>Phone</h3><p><a class="contact-link" href="tel:+61412711993">+61 412 711 993</a></p><p>Direct line for urgent ops software conversations and local operator enquiries.</p></article>
+    <article class="marketing-card"><h3>Address</h3><p>5 Orana Street<br>Airlie Beach QLD 4802<br>Australia</p><p>Opsly is being built close to the tourism operations it is designed to improve.</p></article>
+    <article class="marketing-card"><h3>Instagram</h3><p><a class="contact-link" href="https://instagram.com/opsly" target="_blank" rel="noopener">@opsly</a></p><p>Follow product updates, launches, and behind-the-scenes progress.</p></article>
+  </section>
+</div>
+{% endblock %}
